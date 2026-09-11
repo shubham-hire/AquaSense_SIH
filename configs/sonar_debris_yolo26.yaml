@@ -1,0 +1,21 @@
+# AquaSense YOLO26 Marine Debris Dataset Configuration
+# SIH 2026 PS 26057 — Side-Scan Sonar Automated Debris Detection
+
+# Path relative to workspace or absolute
+path: ../Echo/data/yolo_sonar_dataset
+train: images/train
+val: images/val
+test: images/test
+
+# Debris Classes
+names:
+  0: human_artifact_wreck
+  1: electrical_cable
+  2: electronic_hazard
+  3: plastic_debris
+  4: metal_drum_scrap
+  5: biological_geological_exclusion
+
+# Metadata
+nc: 6
+description: "Acoustic side-scan sonar dataset combining MILCO/NOMBO, Seabed Objects-KLSG, AI4Shipwrecks, and synthetic ghost-gear composites"

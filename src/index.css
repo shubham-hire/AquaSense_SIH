@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Ocean Gradient Palette (§9) */
+    --color-primary: #065A82;       /* Deep Ocean Blue */
+    --color-secondary: #1C7293;     /* Hydrographic Teal */
+    --color-accent: #21295C;        /* Midnight Abyss */
+    --color-cyan: #22D3EE;          /* Bioluminescent Cyan */
+    --color-emerald: #10B981;       /* Sonar Return Emerald */
+    --color-critical: #B23A2E;      /* CRITICAL Priority Warm Red */
+    --color-high: #C97A1E;          /* HIGH Priority Amber */
+    --color-medium: #C9A227;        /* MEDIUM Priority Sonar Yellow */
+    --color-low: #4C8C5B;           /* LOW Priority Muted Green */
+    --color-data-quality: #8A7B5C;   /* Sensor/Motion Data Quality Neutral Slate */
+
+    /* Glass Surfaces */
+    --bg-abyss: #020712;
+    --bg-surface: rgba(6, 20, 42, 0.72);
+    --bg-surface-elevated: rgba(9, 28, 58, 0.85);
+    --bg-surface-inset: rgba(2, 8, 20, 0.75);
+    --border-glass: rgba(34, 211, 238, 0.20);
+    --border-glass-hover: rgba(34, 211, 238, 0.45);
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-abyss);
+    color: var(--text-primary);
+    overflow-x: hidden;
+    background-image: 
+      radial-gradient(ellipse 90% 60% at 50% -20%, rgba(6, 90, 130, 0.28), transparent 75%),
+      radial-gradient(circle 700px at 15% 85%, rgba(28, 114, 147, 0.14), transparent 70%),
+      radial-gradient(circle 600px at 85% 75%, rgba(33, 41, 92, 0.22), transparent 70%),
+      radial-gradient(circle 400px at 50% 50%, rgba(34, 211, 238, 0.04), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(2, 7, 18, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(28, 114, 147, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.7);
+}
+
+/* Glass & Glow Utility Classes */
+.glass-panel {
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-elevated {
+  background: var(--bg-surface-elevated);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass-hover);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+}
+
+.glass-panel-inset {
+  background: var(--bg-surface-inset);
+  border: 1px solid rgba(34, 211, 238, 0.12);
+}
+
+.cyan-glow {
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.25);
+}
+
+.sonar-ping {
+  animation: ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Leaflet Map Dark Ocean Overrides */
+.leaflet-container {
+  background: #020712 !important;
+  font-family: var(--font-sans) !important;
+}
+.leaflet-bar a {
+  background-color: rgba(6, 20, 42, 0.9) !important;
+  color: #22d3ee !important;
+  border-color: rgba(34, 211, 238, 0.3) !important;
+}
+.leaflet-bar a:hover {
+  background-color: rgba(28, 114, 147, 0.9) !important;
+  color: #fff !important;
+}
+.leaflet-popup-content-wrapper {
+  background: rgba(6, 20, 42, 0.95) !important;
+  color: #f1f5f9 !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(34, 211, 238, 0.3) !important;
+  border-radius: 0.75rem !important;
+}
+.leaflet-popup-tip {
+  background: rgba(6, 20, 42, 0.95) !important;
+}

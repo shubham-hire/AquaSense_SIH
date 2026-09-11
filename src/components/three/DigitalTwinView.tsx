@@ -1,0 +1,33 @@
+import React from 'react';
+import { DigitalTwinPanel } from './DigitalTwinPanel';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Box } from 'lucide-react';
+import { useSurveyStore } from '../../store/useSurveyStore';
+
+export const DigitalTwinView: React.FC = () => {
+  const navigate = useNavigate();
+  const { activeSurveyId } = useSurveyStore();
+
+  return (
+    <div className="flex-1 flex flex-col p-4 gap-3 bg-[#020712] overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+        <button
+          onClick={() => navigate(`/surveys/${activeSurveyId}/console`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-slate-300 hover:text-white transition-all"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>BACK TO OPERATOR CONSOLE</span>
+        </button>
+
+        <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
+          <Box className="w-4 h-4" />
+          <span>FULLSCREEN 3D BATHYMETRIC DIGITAL TWIN</span>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col min-h-0">
+        <DigitalTwinPanel className="flex-1" />
+      </div>
+    </div>
+  );
+};
