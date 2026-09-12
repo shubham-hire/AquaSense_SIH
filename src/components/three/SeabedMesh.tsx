@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 
 interface SeabedMeshProps {
   size?: number;
@@ -10,6 +11,7 @@ export const SeabedMesh: React.FC<SeabedMeshProps> = ({
   size = 40,
   segments = 48,
 }) => {
+  const groupRef = useRef<THREE.Group>(null);
   const { geometry, colors } = useMemo(() => {
     const geom = new THREE.PlaneGeometry(size, size, segments, segments);
     const pos = geom.attributes.position;
@@ -43,14 +45,22 @@ export const SeabedMesh: React.FC<SeabedMeshProps> = ({
     return { geometry: geom, colors: colorArray };
   }, [size, segments]);
 
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+    groupRef.current.position.y = -2 + Math.sin(clock.elapsedTime * 0.38) * 0.08;
+    groupRef.current.rotation.z = Math.sin(clock.elapsedTime * 0.16) * 0.008;
+  });
+
   return (
-    <group rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]}>
+    <group ref={groupRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]}>
       {/* Solid Bathymetric Seabed */}
       <mesh geometry={geometry} receiveShadow>
         <meshStandardMaterial
           vertexColors
           roughness={0.8}
           metalness={0.15}
+          emissive="#063C5A"
+          emissiveIntensity={0.18}
           wireframe={false}
         />
       </mesh>

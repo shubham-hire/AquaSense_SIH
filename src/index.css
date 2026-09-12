@@ -43,6 +43,10 @@
     background-attachment: fixed;
   }
 
+  button, a, select, input[type='file'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
     letter-spacing: -0.02em;
@@ -71,11 +75,26 @@
 
 /* Glass & Glow Utility Classes */
 .glass-panel {
+  position: relative;
+  isolation: isolate;
   background: var(--bg-surface);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-glass);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  transition: border-color 280ms ease, box-shadow 280ms ease, transform 280ms cubic-bezier(.2,.8,.2,1);
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background: linear-gradient(115deg, transparent 20%, rgba(103, 232, 249, 0.05) 48%, transparent 75%);
+  background-size: 220% 100%;
+  animation: panel-sheen 9s ease-in-out infinite;
 }
 
 .glass-panel-elevated {
@@ -94,6 +113,56 @@
 .cyan-glow {
   box-shadow: 0 0 16px rgba(34, 211, 238, 0.25);
 }
+
+.app-ocean::before,
+.app-ocean::after {
+  content: '';
+  position: fixed;
+  inset: -25%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at center, rgba(34, 211, 238, 0.055), transparent 56%);
+  filter: blur(16px);
+  animation: deep-current 20s ease-in-out infinite alternate;
+}
+.app-ocean::after { animation-duration: 29s; animation-direction: alternate-reverse; opacity: 0.55; }
+.app-ocean > * { position: relative; z-index: 1; }
+
+.panel-lift:hover {
+  transform: translateY(-2px);
+  border-color: rgba(103, 232, 249, 0.45);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38), 0 0 26px rgba(34, 211, 238, 0.08);
+}
+
+.sidebar-depth { box-shadow: 14px 0 36px rgba(0, 0, 0, 0.16); }
+
+.cursor-sonar {
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 55ms linear;
+  will-change: transform;
+}
+.cursor-sonar__core,
+.cursor-sonar__ring {
+  position: absolute;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+.cursor-sonar__core { width: 5px; height: 5px; background: #67e8f9; box-shadow: 0 0 10px #22d3ee; }
+.cursor-sonar__ring { width: 26px; height: 26px; border: 1px solid rgba(103, 232, 249, 0.6); animation: cursor-ripple 1.8s ease-out infinite; }
+
+button, a, [role='button'], select { transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease; }
+button:hover, a:hover, [role='button']:hover { filter: brightness(1.08); }
+button:active, [role='button']:active { transform: scale(0.97); }
+
+@keyframes deep-current { from { transform: translate3d(-4%, -2%, 0) rotate(-4deg); } to { transform: translate3d(5%, 4%, 0) rotate(5deg); } }
+@keyframes panel-sheen { 0%, 100% { background-position: 120% 0; } 50% { background-position: -80% 0; } }
+@keyframes cursor-ripple { 0% { transform: translate(-50%, -50%) scale(0.65); opacity: 0.85; } 100% { transform: translate(-50%, -50%) scale(1.45); opacity: 0; } }
 
 .sonar-ping {
   animation: ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
@@ -129,4 +198,9 @@
 }
 .leaflet-popup-tip {
   background: rgba(6, 20, 42, 0.95) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+  .cursor-sonar { display: none; }
 }

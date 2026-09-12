@@ -28,6 +28,7 @@ interface SurveyState {
   setIsLiveStreaming: (streaming: boolean) => void;
   streamedDetections: Detection[];
   addStreamedDetection: (detection: Detection) => void;
+  replaceSurveyDetections: (surveyId: string, detections: Detection[]) => void;
   resetStream: () => void;
 
   // Operator Thresholds & Filters
@@ -74,8 +75,20 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     set((state) => {
       // Prevent duplicates
       if (state.streamedDetections.some((d) => d.id === detection.id)) return state;
-      return { streamedDetections: [...state.streamedDetections, detection] };
+      return {
+        streamedDetections: [...state.streamedDetections, detection],
+        detections: state.detections.some((d) => d.id === detection.id)
+          ? state.detections
+          : [...state.detections, detection],
+      };
     }),
+
+  replaceSurveyDetections: (surveyId, incoming) =>
+    set((state) => ({
+      detections: [...state.detections.filter((d) => d.surveyId !== surveyId), ...incoming],
+      streamedDetections: [...state.streamedDetections.filter((d) => d.surveyId !== surveyId), ...incoming],
+      selectedDetectionId: incoming[0]?.id ?? null,
+    })),
 
   resetStream: () =>
     set({

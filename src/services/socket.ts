@@ -1,34 +1,29 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useSurveyStore } from '../store/useSurveyStore';
-import { MOCK_DETECTIONS } from '../data/mockDetections';
+import { fetchSurveyDetections, toFrontendDetection, type BackendDetection } from './api';
 
 /**
- * Hook simulating the native WebSocket client for live detection streaming (§5).
- * Drops detections in real time as they clear verification, preventing drift between
- * the Waterfall Canvas, Digital Twin, Detection Queue, and Live Map.
+ * Subscribes to FastAPI's live pipeline stream. Each verified candidate updates the
+ * map, twin and queue before the mission's full processing run completes.
  */
 export function useLiveDetectionSocket() {
-  const { isLiveStreaming, addStreamedDetection, activeSurveyId } = useSurveyStore();
-  const currentIndexRef = useRef(3);
+  const { isLiveStreaming, addStreamedDetection, activeSurveyId, replaceSurveyDetections, setIsLiveStreaming } = useSurveyStore();
 
   useEffect(() => {
     if (!isLiveStreaming) return;
-
-    const interval = setInterval(() => {
-      const remaining = MOCK_DETECTIONS.filter(
-        (d) => d.surveyId === activeSurveyId
-      );
-
-      if (currentIndexRef.current < remaining.length) {
-        const nextDetection = remaining[currentIndexRef.current];
-        addStreamedDetection(nextDetection);
-        currentIndexRef.current += 1;
-      } else {
-        // Loop or finish
-        clearInterval(interval);
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${protocol}://${window.location.host}/api/v1/surveys/${encodeURIComponent(activeSurveyId)}/stream`);
+    socket.onmessage = async ({ data }) => {
+      const message = JSON.parse(data);
+      if (message.event === 'detection.verified') {
+        addStreamedDetection(toFrontendDetection(message.data as BackendDetection));
       }
-    }, 2800);
-
-    return () => clearInterval(interval);
-  }, [isLiveStreaming, activeSurveyId, addStreamedDetection]);
+      if (message.event === 'processing.complete') {
+        const persisted = await fetchSurveyDetections(activeSurveyId);
+        replaceSurveyDetections(activeSurveyId, persisted);
+        setIsLiveStreaming(false);
+      }
+    };
+    return () => socket.close();
+  }, [isLiveStreaming, activeSurveyId, addStreamedDetection, replaceSurveyDetections, setIsLiveStreaming]);
 }

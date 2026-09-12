@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSurveyStore } from '../../store/useSurveyStore';
 import { useLiveDetectionSocket } from '../../services/socket';
+import { InteractiveCursor } from '../shared/InteractiveCursor';
 import { 
   Radar, 
   Layers, 
@@ -45,7 +46,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#020712] text-slate-100">
+    <div className="app-ocean min-h-screen flex flex-col bg-[#020712] text-slate-100">
+      <InteractiveCursor />
       {/* Top Telemetry & Command Bar */}
       <header className="sticky top-0 z-50 h-16 border-b border-cyan-500/20 bg-[#030A17]/90 backdrop-blur-md px-4 flex items-center justify-between gap-4">
         {/* Left: Branding & Vessel Profile */}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Sparkles } from '@react-three/drei';
 import { SeabedMesh } from './SeabedMesh';
 import { DetectionBeacons } from './DetectionBeacons';
 import { useSurveyStore } from '../../store/useSurveyStore';
@@ -19,7 +19,7 @@ export const DigitalTwinPanel: React.FC<DigitalTwinPanelProps> = ({ className = 
   const surveyDetections = detections.filter((d) => d.surveyId === activeSurveyId);
 
   return (
-    <div className={`relative flex flex-col glass-panel rounded-xl overflow-hidden p-3 gap-2.5 ${className}`}>
+    <div className={`relative flex flex-col glass-panel panel-lift rounded-xl overflow-hidden p-3 gap-2.5 ${className}`}>
       {/* Top Title Bar */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
         <div className="flex items-center gap-2">
@@ -55,15 +55,20 @@ export const DigitalTwinPanel: React.FC<DigitalTwinPanelProps> = ({ className = 
         ) : (
           <Canvas
             camera={{ position: [0, 14, 22], fov: 45 }}
+            dpr={[1, 1.75]}
+            shadows
             onCreated={({ gl }) => {
               gl.setClearColor('#020712');
             }}
             onError={() => setWebGlFailed(true)}
           >
             {/* Ambient & Depth Underwater Lighting */}
-            <ambientLight intensity={0.4} />
-            <directionalLight position={[10, 20, 15]} intensity={1.2} color="#E0F2FE" />
+            <fog attach="fog" args={['#020712', 18, 48]} />
+            <ambientLight intensity={0.35} />
+            <directionalLight castShadow position={[10, 20, 15]} intensity={1.2} color="#E0F2FE" />
             <pointLight position={[0, -2, 0]} intensity={1.5} color="#22D3EE" distance={30} />
+            <pointLight position={[-10, 5, 4]} intensity={0.8} color="#1C7293" distance={24} />
+            <Sparkles count={80} scale={[34, 12, 34]} size={1.8} speed={0.25} opacity={0.32} color="#67E8F9" />
 
             {/* Bounded Camera Rig: no unbounded pan/zoom into empty space */}
             <OrbitControls
