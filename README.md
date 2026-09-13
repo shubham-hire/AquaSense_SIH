@@ -16,13 +16,6 @@ AquaSense is an edge-first, AI-powered platform for detecting marine debris, gho
 
 ---
 
-## Architecture & Documentation
-
-- [`AquaSense_PRD_Architecture.md`](./AquaSense_PRD_Architecture.md): Complete Product Requirements & Technical Architecture (v1.1 compliant with official PS 26057).
-- [`AquaSense_Frontend_Architecture.md`](./AquaSense_Frontend_Architecture.md): Component hierarchy, route map, state management, and design tokens.
-- [`AquaSense_Reuse_Extraction_Guide.md`](./AquaSense_Reuse_Extraction_Guide.md): Teardown extraction checklist from AQUA-SHIELD and EchoPulse.
-
----
 
 ## Route Map
 

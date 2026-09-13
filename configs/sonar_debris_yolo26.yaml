@@ -2,7 +2,7 @@
 # SIH 2026 PS 26057 — Side-Scan Sonar Automated Debris Detection
 
 # Path relative to workspace or absolute
-path: ../Echo/data/yolo_sonar_dataset
+path: ./data/yolo_sonar_dataset
 train: images/train
 val: images/val
 test: images/test

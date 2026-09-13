@@ -7,6 +7,9 @@
 AquaSense_Frontend_Architecture.md
 AquaSense_PRD_Architecture.md
 AquaSense_Reuse_Extraction_Guide.md
+scripts/auto_download_and_train*.py
+scripts/train*.py
+scripts/package_training_bundle.sh
 
 # ==============================================================================
 # Node Dependencies & Build Artifacts
