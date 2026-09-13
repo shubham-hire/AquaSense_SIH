@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useSurveyStore } from '../../store/useSurveyStore';
@@ -6,7 +6,7 @@ import { PriorityBadge } from '../shared/PriorityBadge';
 import { RefusalBadge } from '../shared/RefusalBadge';
 import { DataQualityBadge } from '../shared/DataQualityBadge';
 import { MaskOrBoxOutline } from '../shared/MaskOrBoxOutline';
-import { Navigation, ShieldAlert, LoaderCircle, MapPinOff } from 'lucide-react';
+import { Navigation, ShieldAlert, LoaderCircle, MapPinOff, Hand, Grab, LocateFixed, X } from 'lucide-react';
 
 function MapViewport({ trackCoords }: { trackCoords: [number, number][] }) {
   const map = useMap();
@@ -20,6 +20,81 @@ function MapViewport({ trackCoords }: { trackCoords: [number, number][] }) {
     }
   }, [map, trackCoords]);
   return null;
+}
+
+function MapInteractionListener({
+  onHoverChange,
+  onDragChange,
+}: {
+  onHoverChange: (hovering: boolean) => void;
+  onDragChange: (dragging: boolean) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+
+    const handleMouseEnter = () => onHoverChange(true);
+    const handleMouseLeave = () => {
+      onHoverChange(false);
+      onDragChange(false);
+    };
+
+    const handleDragStart = () => onDragChange(true);
+    const handleDragEnd = () => onDragChange(false);
+
+    container.addEventListener('mouseenter', handleMouseEnter);
+    container.addEventListener('mouseleave', handleMouseLeave);
+    map.on('dragstart', handleDragStart);
+    map.on('dragend', handleDragEnd);
+
+    return () => {
+      container.removeEventListener('mouseenter', handleMouseEnter);
+      container.removeEventListener('mouseleave', handleMouseLeave);
+      map.off('dragstart', handleDragStart);
+      map.off('dragend', handleDragEnd);
+    };
+  }, [map, onHoverChange, onDragChange]);
+
+  return null;
+}
+
+function MapControls({
+  trackCoords,
+  centerPos,
+  hasNavigation,
+}: {
+  trackCoords: [number, number][];
+  centerPos: [number, number];
+  hasNavigation: boolean;
+}) {
+  const map = useMap();
+
+  const handleRecenter = () => {
+    if (trackCoords.length === 1) {
+      map.setView(trackCoords[0], 15, { animate: true });
+    } else if (trackCoords.length > 1) {
+      map.fitBounds(trackCoords, { padding: [28, 28], maxZoom: 15, animate: true });
+    } else {
+      map.setView(centerPos[0] === 0 && centerPos[1] === 0 ? [20, 0] : centerPos, hasNavigation ? 13 : 2, { animate: true });
+    }
+  };
+
+  return (
+    <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'auto', marginTop: '10px', marginRight: '10px' }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          handleRecenter();
+        }}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 text-xs font-mono shadow-lg transition backdrop-blur-md cursor-pointer"
+        title="Recenter map view"
+      >
+        <LocateFixed className="w-3.5 h-3.5 text-cyan-400" />
+        <span>Recenter</span>
+      </button>
+    </div>
+  );
 }
 
 // Custom Leaflet DivIcon generator matching Ocean Gradient Design
@@ -83,6 +158,10 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
     navigationBySurvey,
   } = useSurveyStore();
 
+  const [isHovering, setIsHovering] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dismissNavPrompt, setDismissNavPrompt] = useState(false);
+
   const navigation = navigationBySurvey[activeSurveyId];
   const trackCoords = useMemo<[number, number][]>(
     () => navigation?.trackPoints.map((point) => [point.latitude, point.longitude]) ?? [],
@@ -132,27 +211,62 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
 
       {/* Map Area */}
       <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden border border-slate-700 bg-[#111A2A]">
-          <MapContainer
-            center={centerPos}
-            zoom={hasNavigation ? 13 : 2}
-          scrollWheelZoom={false}
-          className="w-full h-full"
-          >
+        {/* Hand Logo & Pan Mode Indicator on Map Hover */}
+        <div
+          className={`absolute top-3 left-14 z-[400] pointer-events-none transition-all duration-200 flex items-center gap-2.5 px-3 py-1.5 rounded-lg border backdrop-blur-md shadow-2xl ${
+            isDragging
+              ? 'bg-cyan-950/95 border-cyan-400 text-cyan-200 shadow-cyan-500/30 scale-105 opacity-100 translate-y-0'
+              : isHovering
+              ? 'bg-slate-900/95 border-cyan-500/50 text-cyan-300 shadow-black/50 opacity-100 translate-y-0'
+              : 'opacity-0 -translate-y-1 pointer-events-none'
+          }`}
+        >
+          <div className="p-1.5 rounded-md bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+            {isDragging ? (
+              <Grab className="w-4 h-4 text-cyan-300 animate-pulse" />
+            ) : (
+              <Hand className="w-4 h-4 text-cyan-400 animate-pulse" />
+            )}
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+              <span>{isDragging ? 'Panning Map' : 'Hand Tool Active'}</span>
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+            </span>
+            <span className="text-[10px] font-mono text-cyan-300/80">
+              {isDragging ? 'Moving view position…' : 'Click & drag to move map'}
+            </span>
+          </div>
+        </div>
+
+        <MapContainer
+          center={centerPos}
+          zoom={hasNavigation ? 13 : 2}
+          dragging={true}
+          scrollWheelZoom={true}
+          doubleClickZoom={true}
+          className="w-full h-full cursor-grab active:cursor-grabbing"
+        >
           <MapViewport trackCoords={trackCoords} />
+          <MapInteractionListener onHoverChange={setIsHovering} onDragChange={setIsDragging} />
+          <MapControls trackCoords={trackCoords} centerPos={centerPos} hasNavigation={hasNavigation} />
+
           {/* CartoDB Dark Matter ocean basemap */}
           <TileLayer
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
-          {trackCoords.length > 1 && <Polyline
-            positions={trackCoords}
-            pathOptions={{
-              color: '#22D3EE',
-              weight: 2.5,
-              opacity: 0.8,
-            }}
-          />}
+          {trackCoords.length > 1 && (
+            <Polyline
+              positions={trackCoords}
+              pathOptions={{
+                color: '#22D3EE',
+                weight: 2.5,
+                opacity: 0.8,
+              }}
+            />
+          )}
 
           {/* Live Detections Dropped as They Clear Verification */}
           {locatedDetections.map((detection) => {
@@ -210,14 +324,39 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
           })}
         </MapContainer>
 
-        {!hasNavigation && (
-          <div className="absolute inset-0 z-[350] grid place-items-center bg-slate-950/55 p-5 text-center backdrop-blur-[1px]">
-            <div className="max-w-sm rounded-xl border border-slate-600/70 bg-slate-950/90 p-4 shadow-2xl">
-              {navigation?.status === 'loading' ? <LoaderCircle className="mx-auto mb-2 h-5 w-5 animate-spin text-cyan-300" aria-hidden="true" /> : <MapPinOff className="mx-auto mb-2 h-5 w-5 text-amber-300" aria-hidden="true" />}
-              <p className="text-xs font-semibold text-slate-100">{navigation?.status === 'loading' ? 'Loading source navigation…' : 'No map overlay available'}</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-400" role={navigation?.status === 'error' ? 'alert' : undefined}>
-                {navigation?.status === 'error' ? navigation.error : 'Upload an XTF, JSF, or SL2 file containing valid navigation fixes. AquaSense will not substitute demo coordinates.'}
+        {/* Non-blocking Navigation Status Overlay */}
+        {!hasNavigation && !dismissNavPrompt && (
+          <div className="absolute inset-0 z-[350] pointer-events-none flex items-center justify-center p-5 text-center">
+            <div className="max-w-sm rounded-xl border border-slate-600/70 bg-slate-950/90 p-4 shadow-2xl pointer-events-auto backdrop-blur-md relative">
+              <button
+                onClick={() => setDismissNavPrompt(true)}
+                className="absolute top-2.5 right-2.5 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                title="Dismiss notice to explore map freely"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              {navigation?.status === 'loading' ? (
+                <LoaderCircle className="mx-auto mb-2 h-5 w-5 animate-spin text-cyan-300" aria-hidden="true" />
+              ) : (
+                <MapPinOff className="mx-auto mb-2 h-5 w-5 text-amber-300" aria-hidden="true" />
+              )}
+              <p className="text-xs font-semibold text-slate-100">
+                {navigation?.status === 'loading' ? 'Loading source navigation…' : 'No survey track loaded'}
               </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                {navigation?.status === 'error'
+                  ? navigation.error
+                  : 'Upload an XTF, JSF, or SL2 file containing navigation fixes. You can pan and drag anywhere on the ocean map freely with the hand tool.'}
+              </p>
+              <div className="mt-3 pt-2 border-t border-slate-800 flex justify-center">
+                <button
+                  onClick={() => setDismissNavPrompt(true)}
+                  className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Hand className="w-3.5 h-3.5" />
+                  <span>Dismiss & explore ocean map</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -238,3 +377,4 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
     </div>
   );
 };
+

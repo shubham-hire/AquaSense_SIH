@@ -1,10 +1,11 @@
-import React from 'react';
-import { WaterfallCanvas } from './WaterfallCanvas';
+import React, { useCallback, useEffect, useState } from 'react';
+import { WaterfallCanvas, type WaterfallStatus } from './WaterfallCanvas';
 import { PaletteSwitcher } from './PaletteSwitcher';
 import { MeasurementCalipers } from './MeasurementCalipers';
 import { Waves, Maximize2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSurveyStore } from '../../store/useSurveyStore';
+import { waterfallImageUrl } from '../../services/api';
 
 interface SonarWaterfallPanelProps {
   className?: string;
@@ -13,6 +14,12 @@ interface SonarWaterfallPanelProps {
 export const SonarWaterfallPanel: React.FC<SonarWaterfallPanelProps> = ({ className = '' }) => {
   const navigate = useNavigate();
   const { activeSurveyId } = useSurveyStore();
+  const [waterfallStatus, setWaterfallStatus] = useState<WaterfallStatus>('loading');
+  const onWaterfallStatus = useCallback((status: WaterfallStatus) => setWaterfallStatus(status), []);
+
+  useEffect(() => {
+    setWaterfallStatus('loading');
+  }, [activeSurveyId]);
 
   return (
     <div className={`flex flex-col glass-panel rounded-xl overflow-hidden p-3 gap-2.5 ${className}`}>
@@ -40,8 +47,8 @@ export const SonarWaterfallPanel: React.FC<SonarWaterfallPanelProps> = ({ classN
 
       {/* Waterfall Display with Calipers Overlay */}
       <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden bg-black/90">
-        <WaterfallCanvas />
-        <MeasurementCalipers />
+        <WaterfallCanvas sourceUrl={waterfallImageUrl(activeSurveyId)} onStatusChange={onWaterfallStatus} />
+        {waterfallStatus === 'ready' && <MeasurementCalipers />}
       </div>
 
       {/* Bottom Controls */}

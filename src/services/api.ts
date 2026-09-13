@@ -181,3 +181,8 @@ export function reportDownloadUrl(surveyId: string, format: 'json' | 'csv' | 'ge
   const base = apiUrl(`/v1/surveys/${encodeURIComponent(surveyId)}`);
   return format === 'geojson' ? `${base}/geojson` : `${base}/report.${format}`;
 }
+
+/** Normalized image artifact generated during XTF, JSF, or SL2 ingestion. */
+export function waterfallImageUrl(surveyId: string): string {
+  return apiUrl(`/v1/surveys/${encodeURIComponent(surveyId)}/waterfall.png`);
+}
