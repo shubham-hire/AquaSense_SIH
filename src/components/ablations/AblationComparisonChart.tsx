@@ -41,7 +41,7 @@ export const AblationComparisonChart: React.FC = () => {
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#030A17',
+              backgroundColor: '#142238',
               borderColor: '#1C7293',
               borderRadius: '0.5rem',
               fontFamily: 'monospace',

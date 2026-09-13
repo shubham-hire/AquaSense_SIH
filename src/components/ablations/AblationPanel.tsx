@@ -5,9 +5,9 @@ import { Flame, ShieldCheck } from 'lucide-react';
 
 export const AblationPanel: React.FC = () => {
   return (
-    <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto bg-[#020712]">
+    <div className="flex-1 min-h-0 flex flex-col p-4 gap-4 overflow-y-auto bg-[#111A2A]">
       {/* Title & Integrity Guarantee */}
-      <div className="glass-panel p-4 rounded-xl border border-cyan-500/30 flex flex-wrap items-center justify-between gap-3">
+      <div className="page-title-sticky glass-panel p-4 rounded-xl border border-cyan-500/30 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono uppercase bg-rose-950/80 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded flex items-center gap-1">

@@ -4,7 +4,7 @@ import { ShieldCheck, ShieldAlert, Sparkles, CheckCircle2, Sliders } from 'lucid
 
 export const CalibrationStatusPage: React.FC = () => {
   return (
-    <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto bg-[#020712]">
+    <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto bg-[#111A2A]">
       {/* Header */}
       <div className="glass-panel p-4 rounded-xl border border-cyan-500/30 flex flex-wrap items-center justify-between gap-3">
         <div>

@@ -43,7 +43,7 @@ export const DigitalTwinPanel: React.FC<DigitalTwinPanelProps> = ({ className = 
       </div>
 
       {/* 3D Canvas Area */}
-      <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden border border-slate-800 bg-gradient-to-b from-[#020712] to-[#030A17]">
+      <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden border border-slate-700 bg-gradient-to-b from-[#111A2A] to-[#162A43]">
         {webGlFailed ? (
           <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 space-y-2">
             <AlertCircle className="w-8 h-8 text-amber-400" />
@@ -58,12 +58,12 @@ export const DigitalTwinPanel: React.FC<DigitalTwinPanelProps> = ({ className = 
             dpr={[1, 1.75]}
             shadows
             onCreated={({ gl }) => {
-              gl.setClearColor('#020712');
+              gl.setClearColor('#111A2A');
             }}
             onError={() => setWebGlFailed(true)}
           >
             {/* Ambient & Depth Underwater Lighting */}
-            <fog attach="fog" args={['#020712', 18, 48]} />
+            <fog attach="fog" args={['#111A2A', 18, 48]} />
             <ambientLight intensity={0.35} />
             <directionalLight castShadow position={[10, 20, 15]} intensity={1.2} color="#E0F2FE" />
             <pointLight position={[0, -2, 0]} intensity={1.5} color="#22D3EE" distance={30} />

@@ -27,7 +27,7 @@ function createCustomPinIcon(threatLevel: string, confidence: number, isNet: boo
         width: ${isSelected ? '28px' : '22px'};
         height: ${isSelected ? '28px' : '22px'};
         background: ${color};
-        border: 2px solid ${isSelected ? '#FFFFFF' : '#030A17'};
+        border: 2px solid ${isSelected ? '#FFFFFF' : '#142238'};
         border-radius: 50%;
         box-shadow: 0 0 ${isSelected ? '16px' : '8px'} ${color};
         display: flex;
@@ -129,7 +129,7 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
       </div>
 
       {/* Map Area */}
-      <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden border border-slate-800 bg-[#020712]">
+      <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden border border-slate-700 bg-[#111A2A]">
         <MapContainer
           center={centerPos}
           zoom={13}

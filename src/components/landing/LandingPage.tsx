@@ -14,9 +14,9 @@ export const LandingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 gap-6 overflow-y-auto bg-[#020712]">
+    <div className="flex-1 min-h-0 flex flex-col p-6 gap-6 overflow-y-auto bg-[#111A2A]">
       {/* Hero Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+      <div className="page-title-sticky flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-mono uppercase bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded">

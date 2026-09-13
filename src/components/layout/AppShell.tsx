@@ -46,10 +46,10 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   return (
-    <div className="app-ocean min-h-screen flex flex-col bg-[#020712] text-slate-100">
+    <div className="app-ocean h-screen overflow-hidden flex flex-col bg-[#111A2A] text-slate-100">
       <InteractiveCursor />
       {/* Top Telemetry & Command Bar */}
-      <header className="sticky top-0 z-50 h-16 border-b border-cyan-500/20 bg-[#030A17]/90 backdrop-blur-md px-4 flex items-center justify-between gap-4">
+      <header className="z-50 h-16 shrink-0 border-b border-cyan-300/20 bg-[#142238]/90 backdrop-blur-md px-4 flex items-center justify-between gap-4">
         {/* Left: Branding & Vessel Profile */}
         <div className="flex items-center gap-3">
           <div 
@@ -174,7 +174,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       </header>
 
       {/* Main Body with Persistent Navigation */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {children}
       </div>
     </div>

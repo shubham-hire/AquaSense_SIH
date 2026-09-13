@@ -26,7 +26,9 @@ ARTIFACT_DIR = DATA_DIR / "artifacts"
 repository = Repository(DATA_DIR / "aquasense.sqlite3")
 
 app = FastAPI(title="AquaSense API", version="0.1.0", description="Offline-first sonar survey processing API")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], allow_methods=["*"], allow_headers=["*"])
+default_origins = "http://localhost:3000,http://127.0.0.1:3000"
+cors_origins = [origin.strip() for origin in os.getenv("AQUASENSE_CORS_ORIGINS", default_origins).split(",") if origin.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["*"], allow_headers=["*"])
 
 
 def get_detection(detection_id: str) -> dict:

@@ -1,7 +1,31 @@
-// Vite proxies this path to FastAPI in development; deployment can proxy it identically.
 import type { Detection } from '../types';
 
-const API_BASE = '/api';
+/**
+ * Local Vite development proxies `/api` to FastAPI. On Vercel, set
+ * `VITE_API_BASE_URL` to the public origin of the separately deployed API.
+ * It is a public URL, never a secret.
+ */
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '');
+export const API_BASE = configuredApiBase || '/api';
+
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
+/** Build a WebSocket URL without relying on Vercel to host the socket server. */
+export function streamUrl(path: string): string {
+  const configuredSocketBase = import.meta.env.VITE_WS_BASE_URL?.trim().replace(/\/$/, '');
+  if (configuredSocketBase) return `${configuredSocketBase}${path}`;
+
+  if (configuredApiBase) {
+    const apiOrigin = new URL(configuredApiBase);
+    apiOrigin.protocol = apiOrigin.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${apiOrigin.toString().replace(/\/$/, '')}${path}`;
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${protocol}://${window.location.host}${API_BASE}${path}`;
+}
 
 export interface BackendQcReport {
   status: 'PASS' | 'WARNING' | 'CORRUPTED';
@@ -16,10 +40,14 @@ interface IngestResponse {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await fetch(apiUrl(path), init);
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     throw new Error(detail.detail || `Backend request failed (${response.status})`);
+  }
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('The API endpoint returned an unexpected response. Set VITE_API_BASE_URL to your deployed AquaSense API on Vercel.');
   }
   return response.json() as Promise<T>;
 }
@@ -81,6 +109,6 @@ export interface BackendDetection {
 
 /** Backend-generated reports include the same refusal/provenance fields seen in the console. */
 export function reportDownloadUrl(surveyId: string, format: 'json' | 'csv' | 'geojson' | 'pdf'): string {
-  const base = `${API_BASE}/v1/surveys/${encodeURIComponent(surveyId)}`;
+  const base = apiUrl(`/v1/surveys/${encodeURIComponent(surveyId)}`);
   return format === 'geojson' ? `${base}/geojson` : `${base}/report.${format}`;
 }

@@ -8,7 +8,7 @@ import { RefusalStrip } from './RefusalStrip';
 
 export const OperatorConsole: React.FC = () => {
   return (
-    <div className="flex-1 flex flex-col p-4 gap-3 overflow-y-auto min-h-0 bg-[#020712]">
+    <div className="flex-1 min-h-0 flex flex-col p-4 gap-3 overflow-y-auto bg-[#111A2A]">
       {/* Operator Threshold & Class Filter Controls */}
       <ThresholdControls />
 

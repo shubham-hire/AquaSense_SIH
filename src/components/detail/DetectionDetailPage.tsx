@@ -17,7 +17,7 @@ export const DetectionDetailPage: React.FC = () => {
   const detection = detections.find((item) => item.id === d) || detections[0];
 
   return (
-    <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto bg-[#020712]">
+    <div className="flex-1 flex flex-col p-4 gap-4 overflow-y-auto bg-[#111A2A]">
       {/* Top Breadcrumb & Actions Bar */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-3">

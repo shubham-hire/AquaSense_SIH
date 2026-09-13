@@ -58,3 +58,15 @@ npm run build
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Deploy the web app to Vercel
+
+The Vite/React web app is ready for Vercel. The repository includes `vercel.json` so direct visits to console, map, and survey routes correctly load the single-page app.
+
+1. Import the `Main` directory as the Vercel project root.
+2. Keep the detected build command as `npm run build` and output directory as `dist`.
+3. Deploy the FastAPI service separately on a persistent Python host. The API processes large sonar uploads, maintains SQLite state, runs model inference, and provides the detection stream, so it should not be treated as a static Vercel asset.
+4. In Vercel → Settings → Environment Variables, set `VITE_API_BASE_URL` to the deployed API origin, for example `https://api.example.com`. Do not add `/api` to this value.
+5. On the FastAPI host, set `AQUASENSE_CORS_ORIGINS` to your Vercel production URL and any preview URL that needs API access, separated by commas.
+
+`VITE_API_BASE_URL` is intentionally public and is safe to configure in Vercel; it is an endpoint, not a credential. If the stream service uses another origin, set `VITE_WS_BASE_URL` to its `wss://` URL. See `.env.example` for the expected names.

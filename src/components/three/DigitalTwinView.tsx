@@ -9,7 +9,7 @@ export const DigitalTwinView: React.FC = () => {
   const { activeSurveyId } = useSurveyStore();
 
   return (
-    <div className="flex-1 flex flex-col p-4 gap-3 bg-[#020712] overflow-hidden">
+    <div className="flex-1 flex flex-col p-4 gap-3 bg-[#111A2A] overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-800 pb-2">
         <button
           onClick={() => navigate(`/surveys/${activeSurveyId}/console`)}

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSurveyStore } from '../store/useSurveyStore';
-import { fetchSurveyDetections, toFrontendDetection, type BackendDetection } from './api';
+import { fetchSurveyDetections, streamUrl, toFrontendDetection, type BackendDetection } from './api';
 
 /**
  * Subscribes to FastAPI's live pipeline stream. Each verified candidate updates the
@@ -11,8 +11,7 @@ export function useLiveDetectionSocket() {
 
   useEffect(() => {
     if (!isLiveStreaming) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${protocol}://${window.location.host}/api/v1/surveys/${encodeURIComponent(activeSurveyId)}/stream`);
+    const socket = new WebSocket(streamUrl(`/v1/surveys/${encodeURIComponent(activeSurveyId)}/stream`));
     socket.onmessage = async ({ data }) => {
       const message = JSON.parse(data);
       if (message.event === 'detection.verified') {

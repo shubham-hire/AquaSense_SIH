@@ -57,13 +57,13 @@ export const Sidebar: React.FC = () => {
     {
       label: 'Upload & Ingest',
       icon: UploadCloud,
-      path: `/`,
+      path: `/ingest`,
       badge: null,
     },
   ];
 
   return (
-    <aside className="w-60 border-r border-slate-800/80 bg-[#030A17]/80 backdrop-blur-md flex flex-col justify-between shrink-0 select-none sidebar-depth">
+    <aside className="w-60 h-full overflow-hidden border-r border-slate-700/80 bg-[#142238]/80 backdrop-blur-md flex flex-col justify-between shrink-0 select-none sidebar-depth">
       <div className="p-3 space-y-1">
         <div className="px-3 py-2 text-[10px] font-mono tracking-widest text-slate-500 uppercase">
           NAVIGATION CONTROL
