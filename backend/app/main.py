@@ -16,19 +16,56 @@ from reportlab.pdfgen import canvas
 
 from .pipeline import SUPPORTED_FORMATS, inspect_file, iter_pipeline
 from .repository import Repository
-from .schemas import Detection
+from .schemas import Detection, ReviewDecision
 from .streaming import event_hub
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("AQUASENSE_DATA_DIR", ROOT / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 ARTIFACT_DIR = DATA_DIR / "artifacts"
+MODELS_DIR = Path(os.getenv("AQUASENSE_MODELS_DIR", DATA_DIR / "models"))
+
+for directory in (DATA_DIR, UPLOAD_DIR, ARTIFACT_DIR, MODELS_DIR):
+    directory.mkdir(parents=True, exist_ok=True)
+
 repository = Repository(DATA_DIR / "aquasense.sqlite3")
 
 app = FastAPI(title="AquaSense API", version="0.1.0", description="Offline-first sonar survey processing API")
-default_origins = "http://localhost:3000,http://127.0.0.1:3000"
-cors_origins = [origin.strip() for origin in os.getenv("AQUASENSE_CORS_ORIGINS", default_origins).split(",") if origin.strip()]
-app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["*"], allow_headers=["*"])
+
+DEFAULT_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://aqua-sense-sih.vercel.app",
+]
+env_origins = [
+    origin.strip()
+    for origin in os.getenv("AQUASENSE_CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+cors_origins = list(dict.fromkeys(DEFAULT_ORIGINS + env_origins))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+def root() -> dict:
+    return {
+        "name": "AquaSense API",
+        "status": "online",
+        "version": "0.1.0",
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "cors_origins": cors_origins,
+    }
 
 
 def get_detection(detection_id: str) -> dict:
@@ -46,7 +83,32 @@ def survey_detections(survey_id: str) -> list[dict]:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "aquasense-api", "storage": "sqlite"}
+    import shutil
+    try:
+        stat = shutil.disk_usage(DATA_DIR)
+        disk_total_gb = round(stat.total / (1024 ** 3), 2)
+        disk_free_gb = round(stat.free / (1024 ** 3), 2)
+    except Exception:
+        disk_total_gb = None
+        disk_free_gb = None
+
+    model_path = Path(os.getenv("AQUASENSE_MODEL_PATH", MODELS_DIR / "yolo26n_aquasense_marine.pt"))
+    return {
+        "status": "ok",
+        "service": "aquasense-api",
+        "version": "0.1.0",
+        "storage": {
+            "type": "sqlite",
+            "data_dir": str(DATA_DIR),
+            "disk_total_gb": disk_total_gb,
+            "disk_free_gb": disk_free_gb,
+        },
+        "cors_origins": cors_origins,
+        "model": {
+            "configured_path": str(model_path),
+            "weights_present": model_path.exists(),
+        },
+    }
 
 
 @app.post("/v1/surveys/{survey_id}/ingest")
@@ -115,9 +177,44 @@ def list_detections(survey_id: str) -> list[dict]:
 def sonar_metadata(survey_id: str) -> dict:
     info = repository.ingest_info(survey_id)
     if not info or not info[2]:
-        raise HTTPException(404, "No extracted XTF sonar payload is available for this survey")
+        raise HTTPException(404, "No extracted sonar payload is available for this survey")
     extraction = info[2]
     return {key: value for key, value in extraction.items() if key not in {"waterfall_path", "metadata_path"}}
+
+
+@app.get("/v1/surveys/{survey_id}/navigation")
+def survey_navigation(survey_id: str) -> dict:
+    """Return only valid source-extracted fixes for map rendering."""
+    info = repository.ingest_info(survey_id)
+    if not info or not info[2]:
+        raise HTTPException(404, "No extracted navigation is available for this survey")
+    extraction = info[2]
+    track_points = [
+        {
+            "ping_index": item["ping_index"],
+            "timestamp": item.get("timestamp"),
+            "latitude": item["latitude"],
+            "longitude": item["longitude"],
+            "altitude_m": item.get("altitude_m"),
+            "depth_m": item.get("depth_m"),
+            "heading_deg": item.get("heading_deg"),
+            "speed_mps": item.get("speed_mps"),
+        }
+        for item in extraction.get("navigation", [])
+        if item.get("valid_fix") and item.get("latitude") is not None and item.get("longitude") is not None
+    ]
+    map_center = [
+        sum(point["latitude"] for point in track_points) / len(track_points),
+        sum(point["longitude"] for point in track_points) / len(track_points),
+    ] if track_points else None
+    return {
+        "survey_id": survey_id,
+        "format": extraction.get("format"),
+        "total_ping_count": extraction.get("ping_count", 0),
+        "valid_navigation_pings": extraction.get("valid_navigation_pings", 0),
+        "map_center": map_center,
+        "track_points": track_points,
+    }
 
 
 @app.get("/v1/surveys/{survey_id}/waterfall.png")
@@ -130,7 +227,11 @@ def waterfall_image(survey_id: str) -> Response:
 
 @app.get("/v1/detections/{detection_id}", response_model=Detection)
 def detection_detail(detection_id: str) -> dict:
-    return get_detection(detection_id)
+    item = get_detection(detection_id)
+    review = repository.get_review(detection_id)
+    if review is not None:
+        item = {**item, "review": review}
+    return item
 
 
 @app.get("/v1/detections/{detection_id}/explain")
@@ -139,28 +240,127 @@ def explain_detection(detection_id: str) -> dict:
     return {"detection_id": item["id"], "verification_features": item["verification_features"], "feature_weights": item["feature_weights"], "calibrated": item["calibrated"], "model_version": item["model_version"]}
 
 
+# ---------------------------------------------------------------------------
+# Operator Review endpoints
+# ---------------------------------------------------------------------------
+
+@app.put("/v1/detections/{detection_id}/review", status_code=200)
+def submit_review(detection_id: str, decision: ReviewDecision) -> dict:
+    """Save or overwrite an operator review for a detection.
+
+    The detection must already exist (i.e. the survey has been processed).
+    Returns 404 if the detection_id is unknown.
+    """
+    if not repository.detection(detection_id):
+        raise HTTPException(404, "Detection not found")
+    repository.save_review(detection_id, decision.model_dump(mode="json"))
+    return {"ok": True, "detection_id": detection_id, "outcome": decision.outcome}
+
+
+@app.get("/v1/detections/{detection_id}/review")
+def get_review(detection_id: str) -> dict:
+    """Return the operator review for a detection, or 404 if not yet reviewed."""
+    # Verify the detection exists first.
+    get_detection(detection_id)
+    review = repository.get_review(detection_id)
+    if review is None:
+        raise HTTPException(404, "No review has been submitted for this detection")
+    return review
+
+
+@app.delete("/v1/detections/{detection_id}/review", status_code=200)
+def delete_review(detection_id: str) -> dict:
+    """Remove an operator review so the detection returns to unreviewed state."""
+    get_detection(detection_id)
+    deleted = repository.delete_review(detection_id)
+    if not deleted:
+        raise HTTPException(404, "No review has been submitted for this detection")
+    return {"ok": True, "detection_id": detection_id}
+
+
 @app.get("/v1/surveys/{survey_id}/report.json")
 def json_report(survey_id: str) -> Response:
     items = survey_detections(survey_id)
-    payload = {"report_metadata": {"survey_id": survey_id, "total_detections": len(items), "unlocated_refusal_count": sum(d["position"]["position_source"] == "UNAVAILABLE" for d in items)}, "detections": items}
+    reviews = repository.reviews_for_survey(survey_id)
+    # Merge review data into each detection dict without mutating originals.
+    enriched = [{**d, "review": reviews.get(d["id"])} for d in items]
+    payload = {
+        "report_metadata": {
+            "survey_id": survey_id,
+            "total_detections": len(enriched),
+            "unlocated_refusal_count": sum(d["position"]["position_source"] == "UNAVAILABLE" for d in enriched),
+            "reviewed_count": sum(d["review"] is not None for d in enriched),
+            "confirmed_count": sum((d["review"] or {}).get("outcome") == "CONFIRMED" for d in enriched),
+            "rejected_fp_count": sum((d["review"] or {}).get("outcome") == "REJECTED_FP" for d in enriched),
+            "corrected_count": sum((d["review"] or {}).get("outcome") == "CORRECTED" for d in enriched),
+        },
+        "detections": enriched,
+    }
     return Response(json.dumps(payload, indent=2), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="{survey_id}-report.json"'})
 
 
 @app.get("/v1/surveys/{survey_id}/report.csv")
 def csv_report(survey_id: str) -> Response:
     items = survey_detections(survey_id)
+    reviews = repository.reviews_for_survey(survey_id)
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["detection_id", "latitude", "longitude", "classification", "confidence_percent", "width_m", "height_m", "position_source", "low_data_quality", "calibrated", "survey_id", "ping_timestamp"])
+    fieldnames = [
+        "detection_id", "latitude", "longitude", "classification",
+        "confidence_percent", "width_m", "height_m", "position_source",
+        "low_data_quality", "calibrated", "survey_id", "ping_timestamp",
+        # Review columns — null when unreviewed.
+        "review_outcome", "corrected_class", "nav_trustworthy",
+        "operator_note", "reviewed_at", "reviewed_by",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for d in items:
-        writer.writerow({"detection_id": d["id"], "latitude": d["position"]["latitude"], "longitude": d["position"]["longitude"], "classification": d["classification"], "confidence_percent": d["confidence_percent"], "width_m": d["bounding_box"]["width_m"], "height_m": d["bounding_box"]["height_m"], "position_source": d["position"]["position_source"], "low_data_quality": d["low_data_quality"], "calibrated": d["calibrated"], "survey_id": survey_id, "ping_timestamp": d["ping_timestamp"]})
+        rv = reviews.get(d["id"]) or {}
+        writer.writerow({
+            "detection_id": d["id"],
+            "latitude": d["position"]["latitude"],
+            "longitude": d["position"]["longitude"],
+            "classification": d["classification"],
+            "confidence_percent": d["confidence_percent"],
+            "width_m": d["bounding_box"]["width_m"],
+            "height_m": d["bounding_box"]["height_m"],
+            "position_source": d["position"]["position_source"],
+            "low_data_quality": d["low_data_quality"],
+            "calibrated": d["calibrated"],
+            "survey_id": survey_id,
+            "ping_timestamp": d["ping_timestamp"],
+            "review_outcome": rv.get("outcome", ""),
+            "corrected_class": rv.get("corrected_class", ""),
+            "nav_trustworthy": rv.get("nav_trustworthy", ""),
+            "operator_note": rv.get("note", ""),
+            "reviewed_at": rv.get("reviewed_at", ""),
+            "reviewed_by": rv.get("reviewed_by", ""),
+        })
     return Response(output.getvalue(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{survey_id}-report.csv"'})
 
 
 @app.get("/v1/surveys/{survey_id}/geojson")
 def geojson_report(survey_id: str) -> dict:
     items = survey_detections(survey_id)
-    features = [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [d["position"]["longitude"], d["position"]["latitude"]]}, "properties": {"id": d["id"], "classification": d["classification"], "confidence_percent": d["confidence_percent"], "width_m": d["bounding_box"]["width_m"], "height_m": d["bounding_box"]["height_m"]}} for d in items if d["position"]["position_source"] == "GPS_FIX"]
+    reviews = repository.reviews_for_survey(survey_id)
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [d["position"]["longitude"], d["position"]["latitude"]]},
+            "properties": {
+                "id": d["id"],
+                "classification": d["classification"],
+                "confidence_percent": d["confidence_percent"],
+                "width_m": d["bounding_box"]["width_m"],
+                "height_m": d["bounding_box"]["height_m"],
+                "review_outcome": (reviews.get(d["id"]) or {}).get("outcome"),
+                "corrected_class": (reviews.get(d["id"]) or {}).get("corrected_class"),
+                "nav_trustworthy": (reviews.get(d["id"]) or {}).get("nav_trustworthy"),
+            },
+        }
+        for d in items
+        if d["position"]["position_source"] == "GPS_FIX"
+    ]
     return {"type": "FeatureCollection", "name": f"AquaSense_{survey_id}_hazards", "features": features}
 
 

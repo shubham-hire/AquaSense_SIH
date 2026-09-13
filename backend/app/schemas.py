@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -39,6 +39,57 @@ class Position(BaseModel):
         return self
 
 
+# ---------------------------------------------------------------------------
+# Operator Review
+# ---------------------------------------------------------------------------
+
+ReviewOutcome = Literal["CONFIRMED", "REJECTED_FP", "CORRECTED"]
+
+
+class ReviewDecision(BaseModel):
+    """Operator review attached to a single detection contact.
+
+    - CONFIRMED     — operator agrees with the model's classification.
+    - REJECTED_FP   — operator marks the detection as a false positive.
+    - CORRECTED     — operator provides the true class via corrected_class.
+
+    nav_trustworthy: operator attests that the GPS fix for this contact is
+    valid.  This is an additional flag; it does NOT override the structural
+    Position refusal invariant in the backend.
+    """
+
+    outcome: ReviewOutcome
+    corrected_class: str | None = Field(
+        default=None,
+        description="Required when outcome == CORRECTED; must be a known class key.",
+    )
+    note: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Free-text operator note (max 1000 characters).",
+    )
+    nav_trustworthy: bool = Field(
+        default=True,
+        description="Operator attestation that the GPS location is trustworthy.",
+    )
+    reviewed_by: str = Field(
+        default="operator",
+        max_length=128,
+        description="Operator identifier (free-text, no auth required yet).",
+    )
+    reviewed_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+
+    @model_validator(mode="after")
+    def corrected_class_required_when_corrected(self) -> "ReviewDecision":
+        if self.outcome == "CORRECTED" and not self.corrected_class:
+            raise ValueError("corrected_class is required when outcome is CORRECTED")
+        if self.outcome != "CORRECTED" and self.corrected_class is not None:
+            raise ValueError("corrected_class must be null unless outcome is CORRECTED")
+        return self
+
+
 class Detection(BaseModel):
     id: str
     survey_id: str
@@ -58,6 +109,8 @@ class Detection(BaseModel):
     verification_features: dict[str, float | bool]
     feature_weights: dict[str, float]
     provenance: dict[str, str | int | float | bool | None]
+    # Optional — populated after the operator reviews the contact.
+    review: ReviewDecision | None = None
 
 
 class QcReport(BaseModel):
@@ -73,3 +126,4 @@ class QcReport(BaseModel):
     resolution_meters_per_pixel: float = Field(gt=0)
     status: Literal["PASS", "WARNING", "CORRUPTED"]
     recommendations: list[str]
+

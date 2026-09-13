@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Detection, PriorityLevel, SurveyMission } from '../types';
+import { Detection, PriorityLevel, ReviewDecision, SurveyMission, SurveyNavigation } from '../types';
 import { MOCK_SURVEYS } from '../data/mockSurveys';
 import { MOCK_DETECTIONS } from '../data/mockDetections';
 import { SonarColormap } from '../utils/colormaps';
@@ -40,6 +40,12 @@ interface SurveyState {
   setFilterPriority: (pri: PriorityLevel | 'ALL') => void;
   showOnlyRefused: boolean;
   setShowOnlyRefused: (val: boolean) => void;
+
+  // Review decisions (operator feedback loop)
+  setDetectionReview: (detectionId: string, review: ReviewDecision | null) => void;
+
+  navigationBySurvey: Record<string, SurveyNavigation | undefined>;
+  setSurveyNavigation: (surveyId: string, navigation: SurveyNavigation) => void;
 }
 
 export const useSurveyStore = create<SurveyState>((set, get) => ({
@@ -107,4 +113,16 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
 
   showOnlyRefused: false,
   setShowOnlyRefused: (showOnlyRefused) => set({ showOnlyRefused }),
+
+  setDetectionReview: (detectionId, review) =>
+    set((state) => ({
+      detections: state.detections.map((d) =>
+        d.id === detectionId ? { ...d, review } : d
+      ),
+    })),
+
+  navigationBySurvey: {},
+  setSurveyNavigation: (surveyId, navigation) => set((state) => ({
+    navigationBySurvey: { ...state.navigationBySurvey, [surveyId]: navigation },
+  })),
 }));

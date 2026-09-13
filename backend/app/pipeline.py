@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from .schemas import QcReport
+from .vendor_formats import extract_jsf, extract_sl2
 from .xtf import extract_xtf
 
 SUPPORTED_FORMATS = {".xtf": "XTF", ".jsf": "JSF", ".sl2": "SL2", ".tif": "GEOTIFF", ".tiff": "GEOTIFF", ".png": "IMAGE", ".jpg": "IMAGE", ".jpeg": "IMAGE"}
@@ -32,6 +33,18 @@ def inspect_file(survey_id: str, source: Path, original_name: str, artifact_dir:
         dynamic_range = extraction["dynamic_range_db"]
         speckle = extraction["speckle_index"]
         pings = extraction["ping_count"]
+    elif suffix == ".jsf":
+        if artifact_dir is None:
+            raise ValueError("An artifact directory is required for JSF extraction")
+        extraction = extract_jsf(source, artifact_dir)
+        motion_rows, dropout = extraction["motion_artifact_rows"], extraction["dropout_ratio_percent"]
+        dynamic_range, speckle, pings = extraction["dynamic_range_db"], extraction["speckle_index"], extraction["ping_count"]
+    elif suffix == ".sl2":
+        if artifact_dir is None:
+            raise ValueError("An artifact directory is required for SL2 extraction")
+        extraction = extract_sl2(source, artifact_dir)
+        motion_rows, dropout = extraction["motion_artifact_rows"], extraction["dropout_ratio_percent"]
+        dynamic_range, speckle, pings = extraction["dynamic_range_db"], extraction["speckle_index"], extraction["ping_count"]
     elif suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff"}:
         with Image.open(source) as image:
             pixels = np.asarray(image.convert("L"), dtype=np.float32)
@@ -43,7 +56,7 @@ def inspect_file(survey_id: str, source: Path, original_name: str, artifact_dir:
         speckle = round(float(pixels.std() / max(pixels.mean(), 1.0)), 3)
         pings = int(pixels.shape[0])
     else:
-        # pyxtf integration belongs here. Do not invent binary navigation or imagery.
+        # Unsupported binary formats remain safely unlocated until a parser exists.
         motion_rows, dropout, dynamic_range, speckle, pings = [], 0.0, 0.0, 0.0, 0
     status = "CORRUPTED" if not payload else ("WARNING" if dropout > 3 or pings == 0 else "PASS")
     recommendations = []

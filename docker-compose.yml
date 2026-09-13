@@ -1,0 +1,19 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aquasense-api
+    ports:
+      - "8000:8000"
+    environment:
+      - AQUASENSE_DATA_DIR=/data
+      - AQUASENSE_CORS_ORIGINS=https://aqua-sense-sih.vercel.app,http://localhost:3000
+      - PORT=8000
+    volumes:
+      - aquasense-data:/data
+    restart: unless-stopped
+
+volumes:
+  aquasense-data:
+    driver: local

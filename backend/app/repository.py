@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -40,6 +41,11 @@ class Repository:
                     id TEXT PRIMARY KEY,
                     survey_id TEXT NOT NULL REFERENCES surveys(id),
                     payload_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS detection_reviews (
+                    detection_id TEXT PRIMARY KEY REFERENCES detections(id),
+                    review_json  TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL
                 );
                 """
             )
@@ -84,3 +90,57 @@ class Repository:
         with self.connection() as conn:
             row = conn.execute("SELECT payload_json FROM detections WHERE id=?", (detection_id,)).fetchone()
         return json.loads(row["payload_json"]) if row else None
+
+    # ------------------------------------------------------------------
+    # Operator Review
+    # ------------------------------------------------------------------
+
+    def save_review(self, detection_id: str, review: dict) -> None:
+        """Upsert an operator review for a detection.  Idempotent — calling
+        again overwrites the previous decision."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO detection_reviews (detection_id, review_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(detection_id) DO UPDATE SET
+                    review_json = excluded.review_json,
+                    updated_at  = excluded.updated_at
+                """,
+                (detection_id, json.dumps(review), now),
+            )
+
+    def get_review(self, detection_id: str) -> dict | None:
+        """Return the operator review for one detection, or None if unreviewed."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT review_json FROM detection_reviews WHERE detection_id=?",
+                (detection_id,),
+            ).fetchone()
+        return json.loads(row["review_json"]) if row else None
+
+    def delete_review(self, detection_id: str) -> bool:
+        """Remove a review.  Returns True if a row was deleted."""
+        with self.connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM detection_reviews WHERE detection_id=?",
+                (detection_id,),
+            )
+        return cursor.rowcount > 0
+
+    def reviews_for_survey(self, survey_id: str) -> dict[str, dict]:
+        """Return a mapping of detection_id → review_dict for all detections
+        in a survey that have been reviewed.  Used by export endpoints."""
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT dr.detection_id, dr.review_json
+                FROM detection_reviews dr
+                JOIN detections d ON d.id = dr.detection_id
+                WHERE d.survey_id = ?
+                """,
+                (survey_id,),
+            ).fetchall()
+        return {row["detection_id"]: json.loads(row["review_json"]) for row in rows}
+

@@ -25,6 +25,16 @@ export function generateReportJson(survey: SurveyMission, detections: Detection[
     calibrated: d.calibrated,
     survey_id: survey.id,
     ping_timestamp: d.pingTimestamp,
+    review: d.review
+      ? {
+          outcome: d.review.outcome,
+          corrected_class: d.review.correctedClass ?? null,
+          note: d.review.note ?? null,
+          nav_trustworthy: d.review.navTrustworthy,
+          reviewed_by: d.review.reviewedBy,
+          reviewed_at: d.review.reviewedAt,
+        }
+      : null,
   }));
 
   const payload = {
@@ -62,6 +72,13 @@ export function generateReportCsv(survey: SurveyMission, detections: Detection[]
     'threat_level',
     'survey_id',
     'ping_timestamp',
+    // Review columns
+    'review_outcome',
+    'corrected_class',
+    'nav_trustworthy',
+    'operator_note',
+    'reviewed_at',
+    'reviewed_by',
   ];
 
   const rows = detections.map((d) => [
@@ -79,6 +96,13 @@ export function generateReportCsv(survey: SurveyMission, detections: Detection[]
     d.threatLevel,
     survey.id,
     d.pingTimestamp,
+    // Review columns
+    d.review?.outcome ?? '',
+    d.review?.correctedClass ?? '',
+    d.review != null ? String(d.review.navTrustworthy) : '',
+    d.review?.note ?? '',
+    d.review?.reviewedAt ?? '',
+    d.review?.reviewedBy ?? '',
   ]);
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -108,6 +132,9 @@ export function generateGeoJson(survey: SurveyMission, detections: Detection[]):
         calibrated: d.calibrated,
         lowDataQuality: d.lowDataQuality,
         surveyId: survey.id,
+        review_outcome: d.review?.outcome ?? null,
+        corrected_class: d.review?.correctedClass ?? null,
+        nav_trustworthy: d.review?.navTrustworthy ?? null,
       },
     }));
 

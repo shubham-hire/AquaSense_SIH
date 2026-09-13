@@ -1,4 +1,4 @@
-import type { Detection } from '../types';
+import type { Detection, ReviewDecision, ReviewOutcome, SurveyNavigation } from '../types';
 
 /**
  * Local Vite development proxies `/api` to FastAPI. On Vercel, set
@@ -69,6 +69,32 @@ export async function fetchSurveyDetections(surveyId: string): Promise<Detection
   return payload.map(toFrontendDetection);
 }
 
+interface BackendNavigationPoint {
+  ping_index: number; timestamp: string | null; latitude: number; longitude: number;
+  altitude_m: number | null; depth_m: number | null; heading_deg: number | null; speed_mps: number | null;
+}
+
+interface BackendSurveyNavigation {
+  format: string; total_ping_count: number; valid_navigation_pings: number;
+  map_center: [number, number] | null; track_points: BackendNavigationPoint[];
+}
+
+/** Invalid vendor fixes are excluded by the API before the map sees them. */
+export async function fetchSurveyNavigation(surveyId: string): Promise<SurveyNavigation> {
+  const payload = await request<BackendSurveyNavigation>(`/v1/surveys/${encodeURIComponent(surveyId)}/navigation`);
+  return {
+    status: payload.track_points.length > 0 ? 'ready' : 'unavailable',
+    format: payload.format,
+    totalPingCount: payload.total_ping_count,
+    validNavigationPings: payload.valid_navigation_pings,
+    mapCenter: payload.map_center,
+    trackPoints: payload.track_points.map((point) => ({
+      pingIndex: point.ping_index, timestamp: point.timestamp, latitude: point.latitude, longitude: point.longitude,
+      altitudeMeters: point.altitude_m, depthMeters: point.depth_m, headingDeg: point.heading_deg, speedMps: point.speed_mps,
+    })),
+  };
+}
+
 export function toFrontendDetection(detection: BackendDetection): Detection {
   return {
     id: detection.id,
@@ -93,6 +119,16 @@ export function toFrontendDetection(detection: BackendDetection): Detection {
     pingIndex: detection.ping_index,
     dspApplied: detection.dsp_applied,
     notes: `${detection.model_version} · ${detection.provenance.pipeline_version}`,
+    review: detection.review
+      ? {
+          outcome: detection.review.outcome as ReviewOutcome,
+          correctedClass: detection.review.corrected_class ?? null,
+          note: detection.review.note ?? null,
+          navTrustworthy: detection.review.nav_trustworthy,
+          reviewedBy: detection.review.reviewed_by,
+          reviewedAt: detection.review.reviewed_at,
+        }
+      : null,
   };
 }
 
@@ -105,6 +141,39 @@ export interface BackendDetection {
   dsp_applied: boolean; ping_timestamp: string; ping_index: number; threat_level: Detection['threatLevel'];
   verification_features: Detection['verificationFeatures']; feature_weights: Record<string, number>;
   provenance: { pipeline_version: string };
+  review?: {
+    outcome: string;
+    corrected_class: string | null;
+    note: string | null;
+    nav_trustworthy: boolean;
+    reviewed_by: string;
+    reviewed_at: string;
+  } | null;
+}
+
+/** Submit or overwrite an operator review for a single detection. */
+export async function submitReview(
+  detectionId: string,
+  review: {
+    outcome: 'CONFIRMED' | 'REJECTED_FP' | 'CORRECTED';
+    corrected_class?: string | null;
+    note?: string | null;
+    nav_trustworthy: boolean;
+    reviewed_by?: string;
+  }
+): Promise<{ ok: boolean; outcome: string }> {
+  return request<{ ok: boolean; outcome: string }>(
+    `/v1/detections/${encodeURIComponent(detectionId)}/review`,
+    { method: 'PUT', body: JSON.stringify(review), headers: { 'Content-Type': 'application/json' } }
+  );
+}
+
+/** Delete an operator review (returns detection to unreviewed state). */
+export async function deleteReview(detectionId: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(
+    `/v1/detections/${encodeURIComponent(detectionId)}/review`,
+    { method: 'DELETE' }
+  );
 }
 
 /** Backend-generated reports include the same refusal/provenance fields seen in the console. */

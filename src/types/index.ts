@@ -2,6 +2,17 @@
 
 export type PriorityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
+export type ReviewOutcome = 'CONFIRMED' | 'REJECTED_FP' | 'CORRECTED';
+
+export interface ReviewDecision {
+  outcome: ReviewOutcome;
+  correctedClass?: string | null;   // only when outcome === 'CORRECTED'
+  note?: string | null;             // operator free-text (max 1000 chars)
+  navTrustworthy: boolean;          // operator nav attestation
+  reviewedBy: string;               // operator identifier
+  reviewedAt: string;               // ISO datetime
+}
+
 export type PositionStatus =
   | { kind: 'located'; lat: number; lng: number }
   | { kind: 'unlocated'; reason: string };
@@ -80,6 +91,8 @@ export interface Detection {
   dspApplied: boolean;
   notes?: string;
   rejectionReason?: string;
+  /** Operator review — undefined/null when not yet reviewed. */
+  review?: ReviewDecision | null;
 }
 
 export interface TrackPoint {
@@ -91,6 +104,28 @@ export interface TrackPoint {
   speedKnots: number;
   pingIndex: number;
   timestamp: string;
+}
+
+/** Navigation supplied by an ingested sonar file; never fabricated from demo data. */
+export interface ExtractedTrackPoint {
+  pingIndex: number;
+  timestamp: string | null;
+  latitude: number;
+  longitude: number;
+  altitudeMeters: number | null;
+  depthMeters: number | null;
+  headingDeg: number | null;
+  speedMps: number | null;
+}
+
+export interface SurveyNavigation {
+  status: 'loading' | 'ready' | 'unavailable' | 'error';
+  format?: string;
+  totalPingCount?: number;
+  validNavigationPings?: number;
+  mapCenter: [number, number] | null;
+  trackPoints: ExtractedTrackPoint[];
+  error?: string;
 }
 
 export interface SurveyMission {

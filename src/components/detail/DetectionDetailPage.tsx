@@ -7,6 +7,7 @@ import { ProvenanceChain } from './ProvenanceChain';
 import { RejectedCropsGallery } from './RejectedCropsGallery';
 import { PriorityBadge } from '../shared/PriorityBadge';
 import { RefusalBadge } from '../shared/RefusalBadge';
+import { ReviewPanel } from '../review/ReviewPanel';
 import { ArrowLeft, Compass, ShieldCheck } from 'lucide-react';
 
 export const DetectionDetailPage: React.FC = () => {
@@ -67,6 +68,9 @@ export const DetectionDetailPage: React.FC = () => {
 
       {/* Full 10-Feature Verifier Table */}
       <ExplainabilityFeatureTable detection={detection} />
+
+      {/* Operator Review Panel — feeds the post-deployment retraining dataset */}
+      <ReviewPanel detectionId={detection.id} />
 
       {/* Rejected Crops Audit Gallery */}
       <RejectedCropsGallery />

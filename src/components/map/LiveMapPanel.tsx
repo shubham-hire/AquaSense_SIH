@@ -1,12 +1,26 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon } from 'react-leaflet';
+import React, { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useSurveyStore } from '../../store/useSurveyStore';
 import { PriorityBadge } from '../shared/PriorityBadge';
 import { RefusalBadge } from '../shared/RefusalBadge';
 import { DataQualityBadge } from '../shared/DataQualityBadge';
 import { MaskOrBoxOutline } from '../shared/MaskOrBoxOutline';
-import { MapPin, Navigation, Compass, ShieldAlert, Sparkles } from 'lucide-react';
+import { Navigation, ShieldAlert, LoaderCircle, MapPinOff } from 'lucide-react';
+
+function MapViewport({ trackCoords }: { trackCoords: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (trackCoords.length === 1) {
+      map.setView(trackCoords[0], 15, { animate: true });
+    } else if (trackCoords.length > 1) {
+      map.fitBounds(trackCoords, { padding: [28, 28], maxZoom: 15, animate: true });
+    } else {
+      map.setView([0, 0], 2, { animate: false });
+    }
+  }, [map, trackCoords]);
+  return null;
+}
 
 // Custom Leaflet DivIcon generator matching Ocean Gradient Design
 function createCustomPinIcon(threatLevel: string, confidence: number, isNet: boolean, isSelected: boolean) {
@@ -61,22 +75,21 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
   isReadOnly = false,
 }) => {
   const {
-    surveys,
     activeSurveyId,
     streamedDetections,
     detections,
     selectedDetectionId,
     setSelectedDetectionId,
+    navigationBySurvey,
   } = useSurveyStore();
 
-  const activeSurvey = surveys.find((s) => s.id === activeSurveyId) || surveys[0];
-  const centerPos = activeSurvey.centerCoordinates;
-
-  // Trackpoints for ship path
-  const trackCoords: [number, number][] = activeSurvey.trackPoints.map((tp) => [
-    tp.latitude,
-    tp.longitude,
-  ]);
+  const navigation = navigationBySurvey[activeSurveyId];
+  const trackCoords = useMemo<[number, number][]>(
+    () => navigation?.trackPoints.map((point) => [point.latitude, point.longitude]) ?? [],
+    [navigation]
+  );
+  const centerPos: [number, number] = navigation?.mapCenter ?? [0, 0];
+  const hasNavigation = navigation?.status === 'ready' && trackCoords.length > 0;
 
   // Use streamed detections in live mode, or all detections in read-only mode
   const displayedDetections = isReadOnly
@@ -92,14 +105,6 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
   // Refused detections (missing navigation)
   const unlocatedDetections = displayedDetections.filter((d) => d.position.kind === 'unlocated');
 
-  // Simulated Marine Protected Area (MPA) Geofence polygon
-  const mpaPolygon: [number, number][] = [
-    [centerPos[0] - 0.04, centerPos[1] - 0.05],
-    [centerPos[0] + 0.05, centerPos[1] - 0.03],
-    [centerPos[0] + 0.03, centerPos[1] + 0.05],
-    [centerPos[0] - 0.05, centerPos[1] + 0.04],
-  ];
-
   return (
     <div className={`relative flex flex-col glass-panel rounded-xl overflow-hidden p-3 gap-2.5 ${className}`}>
       {/* Top Header */}
@@ -109,16 +114,13 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
           <h3 className="font-heading font-bold text-sm text-white tracking-wide">
             {isReadOnly ? 'GEOSPATIAL SURVEY HAZARDS' : 'REAL-TIME MAP OVERLAY'}
           </h3>
-          <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-500/30 px-1.5 py-0.5 rounded">
-            {isReadOnly ? 'COMPLETED' : 'LIVE STREAM'}
+          <span className={`text-[10px] font-mono border px-1.5 py-0.5 rounded ${hasNavigation ? 'text-emerald-300 bg-emerald-950/70 border-emerald-500/30' : 'text-amber-300 bg-amber-950/50 border-amber-500/30'}`}>
+            {hasNavigation ? 'SOURCE NAVIGATION' : navigation?.status === 'loading' ? 'LOADING NAVIGATION' : 'NO SOURCE NAV'}
           </span>
         </div>
 
         <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
-          <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>{locatedDetections.length} Pins Overlaid</span>
-          </div>
+          <div className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${hasNavigation ? 'bg-emerald-400' : 'bg-slate-500'}`} /><span>{hasNavigation ? `${trackCoords.length} Source Fixes` : 'No Valid Fixes'}</span></div>
           {unlocatedDetections.length > 0 && (
             <div className="flex items-center gap-1 text-rose-400">
               <ShieldAlert className="w-3.5 h-3.5" />
@@ -130,39 +132,27 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
 
       {/* Map Area */}
       <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden border border-slate-700 bg-[#111A2A]">
-        <MapContainer
-          center={centerPos}
-          zoom={13}
+          <MapContainer
+            center={centerPos}
+            zoom={hasNavigation ? 13 : 2}
           scrollWheelZoom={false}
           className="w-full h-full"
-        >
+          >
+          <MapViewport trackCoords={trackCoords} />
           {/* CartoDB Dark Matter ocean basemap */}
           <TileLayer
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
-          {/* Marine Protected Area Geofence */}
-          <Polygon
-            positions={mpaPolygon}
-            pathOptions={{
-              color: '#065A82',
-              fillColor: '#1C7293',
-              fillOpacity: 0.12,
-              weight: 1.5,
-              dashArray: '5, 5',
-            }}
-          />
-
-          {/* Vessel SSS Survey Trackline */}
-          <Polyline
+          {trackCoords.length > 1 && <Polyline
             positions={trackCoords}
             pathOptions={{
               color: '#22D3EE',
               weight: 2.5,
               opacity: 0.8,
             }}
-          />
+          />}
 
           {/* Live Detections Dropped as They Clear Verification */}
           {locatedDetections.map((detection) => {
@@ -219,6 +209,18 @@ export const LiveMapPanel: React.FC<LiveMapPanelProps> = ({
             );
           })}
         </MapContainer>
+
+        {!hasNavigation && (
+          <div className="absolute inset-0 z-[350] grid place-items-center bg-slate-950/55 p-5 text-center backdrop-blur-[1px]">
+            <div className="max-w-sm rounded-xl border border-slate-600/70 bg-slate-950/90 p-4 shadow-2xl">
+              {navigation?.status === 'loading' ? <LoaderCircle className="mx-auto mb-2 h-5 w-5 animate-spin text-cyan-300" aria-hidden="true" /> : <MapPinOff className="mx-auto mb-2 h-5 w-5 text-amber-300" aria-hidden="true" />}
+              <p className="text-xs font-semibold text-slate-100">{navigation?.status === 'loading' ? 'Loading source navigation…' : 'No map overlay available'}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400" role={navigation?.status === 'error' ? 'alert' : undefined}>
+                {navigation?.status === 'error' ? navigation.error : 'Upload an XTF, JSF, or SL2 file containing valid navigation fixes. AquaSense will not substitute demo coordinates.'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Unlocated Refusal Strip in Bottom Overlay */}
         {unlocatedDetections.length > 0 && (

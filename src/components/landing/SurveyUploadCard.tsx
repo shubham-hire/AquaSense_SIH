@@ -2,11 +2,11 @@ import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSurveyStore } from '../../store/useSurveyStore';
 import { UploadCloud, FileText, Waves, ArrowRight, AlertCircle, LoaderCircle } from 'lucide-react';
-import { ingestAndProcessSurvey } from '../../services/api';
+import { fetchSurveyNavigation, ingestAndProcessSurvey } from '../../services/api';
 
 export const SurveyUploadCard: React.FC = () => {
   const navigate = useNavigate();
-  const { activeSurveyId, replaceSurveyDetections, setIsLiveStreaming } = useSurveyStore();
+  const { activeSurveyId, replaceSurveyDetections, setIsLiveStreaming, setSurveyNavigation } = useSurveyStore();
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -53,7 +53,18 @@ export const SurveyUploadCard: React.FC = () => {
     setIsProcessing(true);
     setError(null);
     try {
+      setSurveyNavigation(activeSurveyId, { status: 'loading', mapCenter: null, trackPoints: [] });
       const qc = await ingestAndProcessSurvey(activeSurveyId, selectedFile);
+      try {
+        setSurveyNavigation(activeSurveyId, await fetchSurveyNavigation(activeSurveyId));
+      } catch (navigationError) {
+        setSurveyNavigation(activeSurveyId, {
+          status: 'error',
+          mapCenter: null,
+          trackPoints: [],
+          error: navigationError instanceof Error ? navigationError.message : 'Navigation could not be loaded.',
+        });
+      }
       setQcSummary(`QC ${qc.status}: ${qc.ping_count} pings · ${qc.dropout_ratio_percent}% dropout`);
       // The WebSocket hook replaces the UI as candidates clear verification.
       replaceSurveyDetections(activeSurveyId, []);

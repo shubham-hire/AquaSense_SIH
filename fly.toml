@@ -1,0 +1,20 @@
+app = "aquasense-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  AQUASENSE_DATA_DIR = "/data"
+  AQUASENSE_CORS_ORIGINS = "https://aqua-sense-sih.vercel.app"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[mounts]
+  source = "aquasense_data"
+  destination = "/data"

@@ -49,6 +49,12 @@ export const DetectionQueue: React.FC = () => {
         {filtered.map((detection) => {
           const isSelected = selectedDetectionId === detection.id;
           const isUnlocated = detection.position.kind === 'unlocated';
+          const reviewOutcome = detection.review?.outcome;
+          const reviewPip: Record<string, string> = {
+            CONFIRMED:   'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]',
+            REJECTED_FP: 'bg-red-400    shadow-[0_0_4px_rgba(248,113,113,0.6)]',
+            CORRECTED:   'bg-amber-400  shadow-[0_0_4px_rgba(251,191,36,0.6)]',
+          };
 
           return (
             <div
@@ -63,6 +69,12 @@ export const DetectionQueue: React.FC = () => {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <PriorityBadge priority={detection.threatLevel} size="sm" />
+                  {reviewOutcome && (
+                    <span
+                      title={reviewOutcome}
+                      className={`inline-block w-1.5 h-1.5 rounded-full ${reviewPip[reviewOutcome] ?? ''}`}
+                    />
+                  )}
                   <span className="font-mono text-xs font-bold text-cyan-300">
                     {detection.confidencePercent}%
                   </span>
