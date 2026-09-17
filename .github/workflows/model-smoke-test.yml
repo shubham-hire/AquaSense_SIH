@@ -1,0 +1,75 @@
+name: Model smoke test
+
+on:
+  pull_request:
+    paths:
+      - "best.pt"
+      - "backend/**"
+      - "Dockerfile"
+      - "render.yaml"
+      - ".github/workflows/model-smoke-test.yml"
+  push:
+    branches: [main]
+    paths:
+      - "best.pt"
+      - "backend/**"
+      - "Dockerfile"
+      - "render.yaml"
+      - ".github/workflows/model-smoke-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  model-and-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Verify checkpoint checksum
+        run: echo "342954fdd4ef6a24b89797f68dbeda8ffd9180b1cc7f7f291324c5cee5898f53  best.pt" | sha256sum --check --strict
+
+      - name: Install runtime and test dependencies
+        run: python -m pip install -r backend/requirements.txt pytest httpx
+
+      - name: Load checkpoint and run CPU inference
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from ultralytics import YOLO
+
+          expected = {
+              0: "shipwreck",
+              1: "submarine_pipeline",
+              2: "cylinder",
+              3: "ghost_net",
+              4: "ghost_pot_trap",
+              5: "plastic_debris",
+              6: "metal_debris",
+          }
+          model = YOLO("best.pt")
+          assert model.names == expected, (model.names, expected)
+          results = model.predict(
+              source=np.zeros((640, 640, 3), dtype=np.uint8),
+              imgsz=640,
+              device="cpu",
+              verbose=False,
+          )
+          assert len(results) == 1
+          print("Checkpoint loaded and CPU forward pass completed")
+          PY
+
+      - name: Run backend tests
+        env:
+          PYTHONPATH: backend
+          AQUASENSE_MODEL_PATH: ${{ github.workspace }}/best.pt
+          AQUASENSE_DEVICE: cpu
+          AQUASENSE_BATCH_SIZE: "1"
+        run: pytest backend/tests -q

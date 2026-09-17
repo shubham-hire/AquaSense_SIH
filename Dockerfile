@@ -19,10 +19,10 @@ WORKDIR /app
 COPY backend/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source
+# Copy application source and install the committed checkpoint at its runtime path.
 COPY backend/app /app/app
+COPY best.pt /data/models/best.pt
 
-# Persistent storage mount point. Upload best.pt to /data/models/best.pt.
 RUN mkdir -p /data/uploads /data/artifacts /data/models
 VOLUME ["/data"]
 
