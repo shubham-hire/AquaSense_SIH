@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import csv
 import asyncio
+import csv
 import io
 import json
 import os
@@ -24,28 +24,18 @@ DATA_DIR = Path(os.getenv("AQUASENSE_DATA_DIR", ROOT / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 ARTIFACT_DIR = DATA_DIR / "artifacts"
 MODELS_DIR = Path(os.getenv("AQUASENSE_MODELS_DIR", DATA_DIR / "models"))
-
 for directory in (DATA_DIR, UPLOAD_DIR, ARTIFACT_DIR, MODELS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
-
 repository = Repository(DATA_DIR / "aquasense.sqlite3")
-
 app = FastAPI(title="AquaSense API", version="0.1.0", description="Offline-first sonar survey processing API")
 
 DEFAULT_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:3000", "http://127.0.0.1:3000",
+    "http://localhost:5173", "http://127.0.0.1:5173",
     "https://aqua-sense-sih.vercel.app",
 ]
-env_origins = [
-    origin.strip()
-    for origin in os.getenv("AQUASENSE_CORS_ORIGINS", "").split(",")
-    if origin.strip()
-]
+env_origins = [origin.strip() for origin in os.getenv("AQUASENSE_CORS_ORIGINS", "").split(",") if origin.strip()]
 cors_origins = list(dict.fromkeys(DEFAULT_ORIGINS + env_origins))
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -58,14 +48,7 @@ app.add_middleware(
 
 @app.get("/")
 def root() -> dict:
-    return {
-        "name": "AquaSense API",
-        "status": "online",
-        "version": "0.1.0",
-        "docs_url": "/docs",
-        "health_url": "/health",
-        "cors_origins": cors_origins,
-    }
+    return {"name": "AquaSense API", "status": "online", "version": "0.1.0", "docs_url": "/docs", "health_url": "/health", "cors_origins": cors_origins}
 
 
 def get_detection(detection_id: str) -> dict:
@@ -89,25 +72,13 @@ def health() -> dict:
         disk_total_gb = round(stat.total / (1024 ** 3), 2)
         disk_free_gb = round(stat.free / (1024 ** 3), 2)
     except Exception:
-        disk_total_gb = None
-        disk_free_gb = None
-
+        disk_total_gb = disk_free_gb = None
     model_path = Path(os.getenv("AQUASENSE_MODEL_PATH", MODELS_DIR / "yolo26n_aquasense_marine.pt"))
     return {
-        "status": "ok",
-        "service": "aquasense-api",
-        "version": "0.1.0",
-        "storage": {
-            "type": "sqlite",
-            "data_dir": str(DATA_DIR),
-            "disk_total_gb": disk_total_gb,
-            "disk_free_gb": disk_free_gb,
-        },
+        "status": "ok", "service": "aquasense-api", "version": "0.1.0",
+        "storage": {"type": "sqlite", "data_dir": str(DATA_DIR), "disk_total_gb": disk_total_gb, "disk_free_gb": disk_free_gb},
         "cors_origins": cors_origins,
-        "model": {
-            "configured_path": str(model_path),
-            "weights_present": model_path.exists(),
-        },
+        "model": {"configured_path": str(model_path), "weights_present": model_path.exists()},
     }
 
 
@@ -132,24 +103,37 @@ async def ingest_survey(survey_id: str, file: UploadFile = File(...)) -> dict:
         destination.unlink(missing_ok=True)
         raise HTTPException(422, str(exc)) from exc
     repository.save_ingest(survey_id, str(destination), qc.model_dump(mode="json"), extraction)
-    return {"survey_id": survey_id, "qc_report": qc, "xtf_extraction": {"ping_count": extraction["ping_count"], "valid_navigation_pings": extraction["valid_navigation_pings"], "waterfall_shape": extraction["waterfall_shape"]} if extraction else None}
+    return {
+        "survey_id": survey_id,
+        "qc_report": qc,
+        "xtf_extraction": {"ping_count": extraction["ping_count"], "valid_navigation_pings": extraction["valid_navigation_pings"], "waterfall_shape": extraction["waterfall_shape"]} if extraction else None,
+    }
+
+
+def _collect_pipeline_results(survey_id: str, source_path: str, qc: dict, dsp_applied: bool, extraction: dict | None) -> list[dict]:
+    """Run CPU/GPU-bound inference outside the asyncio event-loop thread."""
+    return list(iter_pipeline(survey_id, Path(source_path), qc, dsp_applied, extraction))
 
 
 async def _process_in_background(survey_id: str, source_path: str, qc: dict, extraction: dict | None, dsp_applied: bool) -> None:
     try:
         await event_hub.publish(survey_id, "processing.started")
         await event_hub.publish(survey_id, "processing.stage", stage="detection", progress_percent=25)
-        detections = []
-        # The iterator is the model-integration contract: each candidate can be
-        # verified and published without waiting for the full mission.
-        for number, detection in enumerate(iter_pipeline(survey_id, Path(source_path), qc, dsp_applied, extraction), start=1):
-            detections.append(detection)
+        detections = await asyncio.to_thread(
+            _collect_pipeline_results,
+            survey_id,
+            source_path,
+            qc,
+            dsp_applied,
+            extraction,
+        )
+        for number, detection in enumerate(detections, start=1):
             await event_hub.publish(survey_id, "processing.stage", stage="verification", progress_percent=75)
             await event_hub.publish(survey_id, "detection.verified", data=detection, sequence=number)
-            await asyncio.sleep(0)  # allow maps/queues to redraw between candidates
+            await asyncio.sleep(0)
         repository.replace_detections(survey_id, detections)
         await event_hub.publish(survey_id, "processing.complete", detection_count=len(detections), progress_percent=100)
-    except Exception as exc:  # clients get a terminal state rather than a silent disconnect
+    except Exception as exc:
         await event_hub.publish(survey_id, "processing.failed", detail=str(exc))
 
 
@@ -178,27 +162,21 @@ def sonar_metadata(survey_id: str) -> dict:
     info = repository.ingest_info(survey_id)
     if not info or not info[2]:
         raise HTTPException(404, "No extracted sonar payload is available for this survey")
-    extraction = info[2]
-    return {key: value for key, value in extraction.items() if key not in {"waterfall_path", "metadata_path"}}
+    return {key: value for key, value in info[2].items() if key not in {"waterfall_path", "metadata_path"}}
 
 
 @app.get("/v1/surveys/{survey_id}/navigation")
 def survey_navigation(survey_id: str) -> dict:
-    """Return only valid source-extracted fixes for map rendering."""
     info = repository.ingest_info(survey_id)
     if not info or not info[2]:
         raise HTTPException(404, "No extracted navigation is available for this survey")
     extraction = info[2]
     track_points = [
         {
-            "ping_index": item["ping_index"],
-            "timestamp": item.get("timestamp"),
-            "latitude": item["latitude"],
-            "longitude": item["longitude"],
-            "altitude_m": item.get("altitude_m"),
-            "depth_m": item.get("depth_m"),
-            "heading_deg": item.get("heading_deg"),
-            "speed_mps": item.get("speed_mps"),
+            "ping_index": item["ping_index"], "timestamp": item.get("timestamp"),
+            "latitude": item["latitude"], "longitude": item["longitude"],
+            "altitude_m": item.get("altitude_m"), "depth_m": item.get("depth_m"),
+            "heading_deg": item.get("heading_deg"), "speed_mps": item.get("speed_mps"),
         }
         for item in extraction.get("navigation", [])
         if item.get("valid_fix") and item.get("latitude") is not None and item.get("longitude") is not None
@@ -208,12 +186,10 @@ def survey_navigation(survey_id: str) -> dict:
         sum(point["longitude"] for point in track_points) / len(track_points),
     ] if track_points else None
     return {
-        "survey_id": survey_id,
-        "format": extraction.get("format"),
+        "survey_id": survey_id, "format": extraction.get("format"),
         "total_ping_count": extraction.get("ping_count", 0),
         "valid_navigation_pings": extraction.get("valid_navigation_pings", 0),
-        "map_center": map_center,
-        "track_points": track_points,
+        "map_center": map_center, "track_points": track_points,
     }
 
 
@@ -229,9 +205,7 @@ def waterfall_image(survey_id: str) -> Response:
 def detection_detail(detection_id: str) -> dict:
     item = get_detection(detection_id)
     review = repository.get_review(detection_id)
-    if review is not None:
-        item = {**item, "review": review}
-    return item
+    return {**item, "review": review} if review is not None else item
 
 
 @app.get("/v1/detections/{detection_id}/explain")
@@ -240,17 +214,8 @@ def explain_detection(detection_id: str) -> dict:
     return {"detection_id": item["id"], "verification_features": item["verification_features"], "feature_weights": item["feature_weights"], "calibrated": item["calibrated"], "model_version": item["model_version"]}
 
 
-# ---------------------------------------------------------------------------
-# Operator Review endpoints
-# ---------------------------------------------------------------------------
-
 @app.put("/v1/detections/{detection_id}/review", status_code=200)
 def submit_review(detection_id: str, decision: ReviewDecision) -> dict:
-    """Save or overwrite an operator review for a detection.
-
-    The detection must already exist (i.e. the survey has been processed).
-    Returns 404 if the detection_id is unknown.
-    """
     if not repository.detection(detection_id):
         raise HTTPException(404, "Detection not found")
     repository.save_review(detection_id, decision.model_dump(mode="json"))
@@ -259,8 +224,6 @@ def submit_review(detection_id: str, decision: ReviewDecision) -> dict:
 
 @app.get("/v1/detections/{detection_id}/review")
 def get_review(detection_id: str) -> dict:
-    """Return the operator review for a detection, or 404 if not yet reviewed."""
-    # Verify the detection exists first.
     get_detection(detection_id)
     review = repository.get_review(detection_id)
     if review is None:
@@ -270,10 +233,8 @@ def get_review(detection_id: str) -> dict:
 
 @app.delete("/v1/detections/{detection_id}/review", status_code=200)
 def delete_review(detection_id: str) -> dict:
-    """Remove an operator review so the detection returns to unreviewed state."""
     get_detection(detection_id)
-    deleted = repository.delete_review(detection_id)
-    if not deleted:
+    if not repository.delete_review(detection_id):
         raise HTTPException(404, "No review has been submitted for this detection")
     return {"ok": True, "detection_id": detection_id}
 
@@ -282,12 +243,10 @@ def delete_review(detection_id: str) -> dict:
 def json_report(survey_id: str) -> Response:
     items = survey_detections(survey_id)
     reviews = repository.reviews_for_survey(survey_id)
-    # Merge review data into each detection dict without mutating originals.
     enriched = [{**d, "review": reviews.get(d["id"])} for d in items]
     payload = {
         "report_metadata": {
-            "survey_id": survey_id,
-            "total_detections": len(enriched),
+            "survey_id": survey_id, "total_detections": len(enriched),
             "unlocated_refusal_count": sum(d["position"]["position_source"] == "UNAVAILABLE" for d in enriched),
             "reviewed_count": sum(d["review"] is not None for d in enriched),
             "confirmed_count": sum((d["review"] or {}).get("outcome") == "CONFIRMED" for d in enriched),
@@ -305,36 +264,25 @@ def csv_report(survey_id: str) -> Response:
     reviews = repository.reviews_for_survey(survey_id)
     output = io.StringIO()
     fieldnames = [
-        "detection_id", "latitude", "longitude", "classification",
-        "confidence_percent", "width_m", "height_m", "position_source",
-        "low_data_quality", "calibrated", "survey_id", "ping_timestamp",
-        # Review columns — null when unreviewed.
-        "review_outcome", "corrected_class", "nav_trustworthy",
-        "operator_note", "reviewed_at", "reviewed_by",
+        "detection_id", "latitude", "longitude", "classification", "confidence_percent",
+        "width_m", "height_m", "position_source", "low_data_quality", "calibrated",
+        "survey_id", "ping_timestamp", "review_outcome", "corrected_class",
+        "nav_trustworthy", "operator_note", "reviewed_at", "reviewed_by",
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for d in items:
         rv = reviews.get(d["id"]) or {}
         writer.writerow({
-            "detection_id": d["id"],
-            "latitude": d["position"]["latitude"],
-            "longitude": d["position"]["longitude"],
-            "classification": d["classification"],
-            "confidence_percent": d["confidence_percent"],
-            "width_m": d["bounding_box"]["width_m"],
-            "height_m": d["bounding_box"]["height_m"],
-            "position_source": d["position"]["position_source"],
-            "low_data_quality": d["low_data_quality"],
-            "calibrated": d["calibrated"],
-            "survey_id": survey_id,
-            "ping_timestamp": d["ping_timestamp"],
-            "review_outcome": rv.get("outcome", ""),
-            "corrected_class": rv.get("corrected_class", ""),
-            "nav_trustworthy": rv.get("nav_trustworthy", ""),
-            "operator_note": rv.get("note", ""),
-            "reviewed_at": rv.get("reviewed_at", ""),
-            "reviewed_by": rv.get("reviewed_by", ""),
+            "detection_id": d["id"], "latitude": d["position"]["latitude"],
+            "longitude": d["position"]["longitude"], "classification": d["classification"],
+            "confidence_percent": d["confidence_percent"], "width_m": d["bounding_box"]["width_m"],
+            "height_m": d["bounding_box"]["height_m"], "position_source": d["position"]["position_source"],
+            "low_data_quality": d["low_data_quality"], "calibrated": d["calibrated"],
+            "survey_id": survey_id, "ping_timestamp": d["ping_timestamp"],
+            "review_outcome": rv.get("outcome", ""), "corrected_class": rv.get("corrected_class", ""),
+            "nav_trustworthy": rv.get("nav_trustworthy", ""), "operator_note": rv.get("note", ""),
+            "reviewed_at": rv.get("reviewed_at", ""), "reviewed_by": rv.get("reviewed_by", ""),
         })
     return Response(output.getvalue(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{survey_id}-report.csv"'})
 
@@ -348,18 +296,15 @@ def geojson_report(survey_id: str) -> dict:
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [d["position"]["longitude"], d["position"]["latitude"]]},
             "properties": {
-                "id": d["id"],
-                "classification": d["classification"],
-                "confidence_percent": d["confidence_percent"],
-                "width_m": d["bounding_box"]["width_m"],
+                "id": d["id"], "classification": d["classification"],
+                "confidence_percent": d["confidence_percent"], "width_m": d["bounding_box"]["width_m"],
                 "height_m": d["bounding_box"]["height_m"],
                 "review_outcome": (reviews.get(d["id"]) or {}).get("outcome"),
                 "corrected_class": (reviews.get(d["id"]) or {}).get("corrected_class"),
                 "nav_trustworthy": (reviews.get(d["id"]) or {}).get("nav_trustworthy"),
             },
         }
-        for d in items
-        if d["position"]["position_source"] == "GPS_FIX"
+        for d in items if d["position"]["position_source"] == "GPS_FIX"
     ]
     return {"type": "FeatureCollection", "name": f"AquaSense_{survey_id}_hazards", "features": features}
 
@@ -367,13 +312,18 @@ def geojson_report(survey_id: str) -> dict:
 @app.get("/v1/surveys/{survey_id}/report.pdf")
 def pdf_report(survey_id: str) -> Response:
     items = survey_detections(survey_id)
-    pdf = io.BytesIO(); page = canvas.Canvas(pdf, pagesize=letter)
-    page.setTitle(f"AquaSense mission report — {survey_id}"); page.drawString(72, 750, f"AquaSense mission report: {survey_id}")
+    pdf = io.BytesIO()
+    page = canvas.Canvas(pdf, pagesize=letter)
+    page.setTitle(f"AquaSense mission report — {survey_id}")
+    page.drawString(72, 750, f"AquaSense mission report: {survey_id}")
     page.drawString(72, 730, f"Detections: {len(items)} | Unlocated: {sum(d['position']['position_source'] == 'UNAVAILABLE' for d in items)}")
     y = 700
     for d in items:
-        page.drawString(72, y, f"{d['id'][:8]}  {d['classification']}  {d['confidence_percent']}%  {d['position']['position_source']}"); y -= 20
-        if y < 70: page.showPage(); y = 750
+        page.drawString(72, y, f"{d['id'][:8]}  {d['classification']}  {d['confidence_percent']}%  {d['position']['position_source']}")
+        y -= 20
+        if y < 70:
+            page.showPage()
+            y = 750
     page.save()
     return Response(pdf.getvalue(), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{survey_id}-report.pdf"'})
 
@@ -383,8 +333,6 @@ async def stream_detections(websocket: WebSocket, survey_id: str) -> None:
     await websocket.accept()
     queue = event_hub.subscribe(survey_id)
     try:
-        # Late subscribers get persisted events after a completed run. During an
-        # active run they receive each event as verification clears it.
         state = event_hub._state.get(survey_id, {})
         if state.get("event") == "processing.complete":
             for detection in repository.detections_for_survey(survey_id):
