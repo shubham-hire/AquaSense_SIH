@@ -11,9 +11,11 @@ from uuid import uuid4
 import numpy as np
 from PIL import Image
 
+# Local development should use the same verified checkpoint committed at the
+# repository root. Docker/Render can still override this with an absolute path.
 os.environ.setdefault(
     "AQUASENSE_MODEL_PATH",
-    str(Path(__file__).resolve().parents[2] / "models_checkpoints" / "best.pt"),
+    str(Path(__file__).resolve().parents[2] / "best.pt"),
 )
 
 from .detector import get_adapter
