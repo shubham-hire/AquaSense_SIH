@@ -1,22 +1,31 @@
 services:
   - type: web
     name: aquasense-api
-    runtime: python
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: starter
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: mkdir -p /var/data/models && cp -f best.pt /var/data/models/best.pt && PYTHONPATH=backend python -m app.preflight && uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
+    region: singapore
+    healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.8
       - key: AQUASENSE_DATA_DIR
-        value: /var/data
+        value: /data
       - key: AQUASENSE_MODEL_PATH
-        value: /var/data/models/best.pt
+        value: /data/models/best.pt
       - key: AQUASENSE_MODEL_SHA256
         value: 342954fdd4ef6a24b89797f68dbeda8ffd9180b1cc7f7f291324c5cee5898f53
+      - key: AQUASENSE_DEVICE
+        value: cpu
+      - key: AQUASENSE_BATCH_SIZE
+        value: "1"
+      - key: AQUASENSE_CONF_THRESH
+        value: "0.10"
+      - key: AQUASENSE_IOU_THRESH
+        value: "0.45"
+      - key: AQUASENSE_TILE_SIZE
+        value: "640"
       - key: AQUASENSE_CORS_ORIGINS
         value: https://aqua-sense-sih.vercel.app
     disk:
       name: aquasense-storage
-      mountPath: /var/data
+      mountPath: /data
       sizeGB: 10
