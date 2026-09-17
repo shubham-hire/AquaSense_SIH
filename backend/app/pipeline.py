@@ -10,14 +10,13 @@ from uuid import uuid4
 import numpy as np
 from PIL import Image
 
-# Local development convention. Deployments should override this with an
-# absolute persistent path such as /data/models/best.pt.
 os.environ.setdefault(
     "AQUASENSE_MODEL_PATH",
     str(Path(__file__).resolve().parents[2] / "models_checkpoints" / "best.pt"),
 )
 
 from .detector import get_adapter
+from .geolocation import geolocate_detection
 from .schemas import QcReport
 from .vendor_formats import extract_jsf, extract_sl2
 from .xtf import extract_xtf
@@ -33,7 +32,6 @@ SUPPORTED_FORMATS = {
     ".jpeg": "IMAGE",
 }
 
-# Class order read from the supplied Ultralytics 8.4.153 checkpoint.
 BEST_PT_CLASS_NAMES: dict[int, str] = {
     0: "shipwreck",
     1: "submarine_pipeline",
@@ -219,26 +217,11 @@ def _iter_yolo_pipeline(
                     raw.y_norm + raw.box_xywh_norm[3] / 2
                 ) * tile_size
                 navigation = _navigation_for_row(extraction, center_y, image_height)
-                valid_fix = bool(
-                    navigation
-                    and navigation.get("valid_fix")
-                    and navigation.get("latitude") is not None
-                    and navigation.get("longitude") is not None
-                )
-                position = (
-                    {
-                        "latitude": navigation["latitude"],
-                        "longitude": navigation["longitude"],
-                        "position_source": "GPS_FIX",
-                        "refusal_reason": None,
-                    }
-                    if valid_fix
-                    else {
-                        "latitude": None,
-                        "longitude": None,
-                        "position_source": "UNAVAILABLE",
-                        "refusal_reason": "Valid navigation metadata was not available for this detection row.",
-                    }
+                position, location_provenance = geolocate_detection(
+                    navigation=navigation,
+                    center_x_px=center_x,
+                    image_width_px=image_width,
+                    extraction=extraction,
                 )
                 classification = BEST_PT_CLASS_NAMES.get(
                     raw.class_id, f"unknown_{raw.class_id}"
@@ -282,18 +265,17 @@ def _iter_yolo_pipeline(
                     "threat_level": _threat_level(
                         classification, raw.confidence_percent
                     ),
-                    # The supplied checkpoint is a detector only. Do not fabricate
-                    # physical-verifier features or calibration outputs.
                     "verification_features": {},
                     "feature_weights": {},
                     "provenance": {
                         "source_sha256": source_digest,
                         "model_sha256": model_digest,
-                        "pipeline_version": "0.2.0",
+                        "pipeline_version": "0.3.0",
                         "detector_backend": "ultralytics-yolo26",
                         "resolution_meters_per_pixel": resolution,
                         "calibration_status": "not_fitted",
                         "model_path": str(model_path),
+                        **location_provenance,
                     },
                 }
 
@@ -378,7 +360,7 @@ def _iter_heuristic_fallback(
         },
         "provenance": {
             "source_sha256": digest,
-            "pipeline_version": "0.2.0",
+            "pipeline_version": "0.3.0",
             "detector_backend": "heuristic-fallback",
             "resolution_meters_per_pixel": qc["resolution_meters_per_pixel"],
             "calibration_status": "not_fitted",
@@ -393,12 +375,7 @@ def iter_pipeline(
     dsp_applied: bool,
     extraction: dict | None = None,
 ):
-    """Yield model detections progressively, preserving navigation refusal.
-
-    The heuristic is used only when the configured model cannot be loaded. A
-    valid model that finds zero objects returns zero detections; it never falls
-    back to a fabricated candidate.
-    """
+    """Yield detections progressively while refusing unsupported geolocation."""
     source_digest = _sha256_file(source)
     adapter = get_adapter()
     if adapter.is_ready:
@@ -425,5 +402,4 @@ def run_pipeline(
     dsp_applied: bool,
     extraction: dict | None = None,
 ) -> list[dict]:
-    """Compatibility helper for non-streaming callers and tests."""
     return list(iter_pipeline(survey_id, source, qc, dsp_applied, extraction))
