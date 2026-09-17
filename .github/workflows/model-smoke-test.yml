@@ -78,6 +78,4 @@ jobs:
         env:
           PYTHONPATH: backend
           AQUASENSE_MODEL_PATH: ${{ runner.temp }}/missing-best.pt
-          AQUASENSE_DEVICE: cpu
-          AQUASENSE_BATCH_SIZE: "1"
         run: pytest backend/tests -q
