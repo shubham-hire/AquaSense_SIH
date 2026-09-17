@@ -196,7 +196,7 @@ def _iter_yolo_pipeline(survey_id: str, source: Path, qc: dict, dsp_applied: boo
                         "height_m": round(raw.height_m, 3),
                     },
                     "segmentation_mask": raw.seg_mask, "position": position,
-                    "calibrated": measurement_status == "SOURCE_DERIVED",
+                    "calibrated": False,
                     "low_data_quality": bool(qc.get("motion_artifact_rows")),
                     "motion_uncorrected": not bool(navigation and navigation.get("pitch_deg") is not None and navigation.get("roll_deg") is not None),
                     "model_version": raw.model_version, "dsp_applied": dsp_applied,
