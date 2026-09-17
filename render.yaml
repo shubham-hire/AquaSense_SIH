@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
+    startCommand: mkdir -p /var/data/models && cp -f best.pt /var/data/models/best.pt && uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
