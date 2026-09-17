@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: mkdir -p /var/data/models && cp -f best.pt /var/data/models/best.pt && uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
+    startCommand: mkdir -p /var/data/models && cp -f best.pt /var/data/models/best.pt && PYTHONPATH=backend python -m app.preflight && uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
@@ -12,6 +12,8 @@ services:
         value: /var/data
       - key: AQUASENSE_MODEL_PATH
         value: /var/data/models/best.pt
+      - key: AQUASENSE_MODEL_SHA256
+        value: 342954fdd4ef6a24b89797f68dbeda8ffd9180b1cc7f7f291324c5cee5898f53
       - key: AQUASENSE_CORS_ORIGINS
         value: https://aqua-sense-sih.vercel.app
     disk:

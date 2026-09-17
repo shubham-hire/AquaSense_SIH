@@ -7,6 +7,7 @@ primary_region = "iad"
 [env]
   AQUASENSE_DATA_DIR = "/data"
   AQUASENSE_MODEL_PATH = "/data/models/best.pt"
+  AQUASENSE_MODEL_SHA256 = "342954fdd4ef6a24b89797f68dbeda8ffd9180b1cc7f7f291324c5cee5898f53"
   AQUASENSE_CORS_ORIGINS = "https://aqua-sense-sih.vercel.app"
 
 [http_service]
