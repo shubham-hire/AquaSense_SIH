@@ -5,34 +5,25 @@ import { MOCK_DETECTIONS } from '../data/mockDetections';
 import { SonarColormap } from '../utils/colormaps';
 
 interface SurveyState {
-  // Navigation & View Mode
   mode: 'operator' | 'executive';
   setMode: (mode: 'operator' | 'executive') => void;
-
-  // Active Survey & Detections
   surveys: SurveyMission[];
   activeSurveyId: string;
   detections: Detection[];
   selectedDetectionId: string | null;
   setActiveSurveyId: (id: string) => void;
   setSelectedDetectionId: (id: string | null) => void;
-
-  // Waterfall Controls
   waterfallPalette: SonarColormap;
   setWaterfallPalette: (palette: SonarColormap) => void;
   dspFilterActive: boolean;
   setDspFilterActive: (active: boolean) => void;
-
-  // Live Processing Simulation
   isLiveStreaming: boolean;
   setIsLiveStreaming: (streaming: boolean) => void;
   streamedDetections: Detection[];
   addStreamedDetection: (detection: Detection) => void;
   replaceSurveyDetections: (surveyId: string, detections: Detection[]) => void;
   resetStream: () => void;
-
-  // Operator Thresholds & Filters
-  confidenceThreshold: number; // 0 to 100
+  confidenceThreshold: number;
   setConfidenceThreshold: (val: number) => void;
   filterClass: string;
   setFilterClass: (cls: string) => void;
@@ -40,12 +31,29 @@ interface SurveyState {
   setFilterPriority: (pri: PriorityLevel | 'ALL') => void;
   showOnlyRefused: boolean;
   setShowOnlyRefused: (val: boolean) => void;
-
-  // Review decisions (operator feedback loop)
   setDetectionReview: (detectionId: string, review: ReviewDecision | null) => void;
-
   navigationBySurvey: Record<string, SurveyNavigation | undefined>;
   setSurveyNavigation: (surveyId: string, navigation: SurveyNavigation) => void;
+}
+
+function updateMissionMetrics(mission: SurveyMission, detections: Detection[]): SurveyMission {
+  const count = detections.length;
+  return {
+    ...mission,
+    status: 'Completed',
+    summaryMetrics: {
+      ...mission.summaryMetrics,
+      candidateCount: count,
+      verifiedCount: count,
+      rejectedCount: 0,
+      unlocatedCount: detections.filter((item) => item.position.kind === 'unlocated').length,
+      uncalibratedCount: detections.filter((item) => !item.calibrated).length,
+      lowQualityCount: detections.filter((item) => item.lowDataQuality).length,
+      avgConfidencePercent: count
+        ? Math.round(detections.reduce((sum, item) => sum + item.confidencePercent, 0) / count)
+        : 0,
+    },
+  };
 }
 
 export const useSurveyStore = create<SurveyState>((set, get) => ({
@@ -59,31 +67,26 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
 
   setActiveSurveyId: (id) => {
     const matched = get().detections.filter((d) => d.surveyId === id);
-    set({
-      activeSurveyId: id,
-      selectedDetectionId: matched.length > 0 ? matched[0].id : null,
-    });
+    set({ activeSurveyId: id, selectedDetectionId: matched[0]?.id ?? null });
   },
-
   setSelectedDetectionId: (id) => set({ selectedDetectionId: id }),
 
   waterfallPalette: 'amber',
   setWaterfallPalette: (waterfallPalette) => set({ waterfallPalette }),
-
   dspFilterActive: false,
   setDspFilterActive: (dspFilterActive) => set({ dspFilterActive }),
 
   isLiveStreaming: false,
   setIsLiveStreaming: (isLiveStreaming) => set({ isLiveStreaming }),
-  streamedDetections: MOCK_DETECTIONS.slice(0, 3), // Start with first few, append during stream
+  // Live results must start empty; demo records must never appear as model output.
+  streamedDetections: [],
 
   addStreamedDetection: (detection) =>
     set((state) => {
-      // Prevent duplicates
-      if (state.streamedDetections.some((d) => d.id === detection.id)) return state;
+      if (state.streamedDetections.some((item) => item.id === detection.id)) return state;
       return {
         streamedDetections: [...state.streamedDetections, detection],
-        detections: state.detections.some((d) => d.id === detection.id)
+        detections: state.detections.some((item) => item.id === detection.id)
           ? state.detections
           : [...state.detections, detection],
       };
@@ -91,38 +94,40 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
 
   replaceSurveyDetections: (surveyId, incoming) =>
     set((state) => ({
-      detections: [...state.detections.filter((d) => d.surveyId !== surveyId), ...incoming],
-      streamedDetections: [...state.streamedDetections.filter((d) => d.surveyId !== surveyId), ...incoming],
+      detections: [...state.detections.filter((item) => item.surveyId !== surveyId), ...incoming],
+      streamedDetections: [
+        ...state.streamedDetections.filter((item) => item.surveyId !== surveyId),
+        ...incoming,
+      ],
       selectedDetectionId: incoming[0]?.id ?? null,
+      surveys: state.surveys.map((mission) =>
+        mission.id === surveyId ? updateMissionMetrics(mission, incoming) : mission
+      ),
     })),
 
-  resetStream: () =>
-    set({
-      streamedDetections: MOCK_DETECTIONS.slice(0, 3),
-      isLiveStreaming: false,
-    }),
+  resetStream: () => set({ streamedDetections: [], isLiveStreaming: false }),
 
-  confidenceThreshold: 50,
+  // The backend already applies its configured 10% inference threshold. Matching
+  // that value prevents valid low-confidence candidates from being hidden by default.
+  confidenceThreshold: 10,
   setConfidenceThreshold: (confidenceThreshold) => set({ confidenceThreshold }),
-
   filterClass: 'ALL',
   setFilterClass: (filterClass) => set({ filterClass }),
-
   filterPriority: 'ALL',
   setFilterPriority: (filterPriority) => set({ filterPriority }),
-
   showOnlyRefused: false,
   setShowOnlyRefused: (showOnlyRefused) => set({ showOnlyRefused }),
 
   setDetectionReview: (detectionId, review) =>
     set((state) => ({
-      detections: state.detections.map((d) =>
-        d.id === detectionId ? { ...d, review } : d
+      detections: state.detections.map((item) =>
+        item.id === detectionId ? { ...item, review } : item
       ),
     })),
 
   navigationBySurvey: {},
-  setSurveyNavigation: (surveyId, navigation) => set((state) => ({
-    navigationBySurvey: { ...state.navigationBySurvey, [surveyId]: navigation },
-  })),
+  setSurveyNavigation: (surveyId, navigation) =>
+    set((state) => ({
+      navigationBySurvey: { ...state.navigationBySurvey, [surveyId]: navigation },
+    })),
 }));
