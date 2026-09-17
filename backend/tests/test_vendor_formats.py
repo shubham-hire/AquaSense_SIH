@@ -14,13 +14,13 @@ from app.vendor_formats import _EARTH_RADIUS_M, extract_jsf, extract_sl2
 def _jsf_message(ping: int, channel: int, samples: list[int], *, valid_nav: bool) -> bytes:
     payload = bytearray(240 + 2 * len(samples))
     flags = 0x0001 | 0x0008 | 0x0020 | 0x0040 | 0x0200 if valid_nav else 0
-    struct.pack_into("<iI", payload, 0, 1_700_000_000, 0)  # epoch and start depth
+    struct.pack_into("<iI", payload, 0, 1_700_000_000, 0)
     struct.pack_into("<I", payload, 8, ping)
-    struct.pack_into("<Hh", payload, 30, flags, 0)          # validity, reserved
-    struct.pack_into("<h", payload, 34, 0)                  # envelope samples
+    struct.pack_into("<Hh", payload, 30, flags, 0)
+    struct.pack_into("<h", payload, 34, 0)
     struct.pack_into("<iiH", payload, 80, int(76.78 * 600_000), int(12.34 * 600_000), 2)
     struct.pack_into("<H", payload, 114, len(samples))
-    struct.pack_into("<ii", payload, 136, 25_000, 6_000)    # depth/altitude mm
+    struct.pack_into("<ii", payload, 136, 25_000, 6_000)
     struct.pack_into("<Hhh", payload, 172, 9_000, 1_000, -1_000)
     struct.pack_into("<I", payload, 200, 12_345)
     struct.pack_into(f"<{len(samples)}H", payload, 240, *samples)
@@ -48,8 +48,8 @@ def _sl2_frame(offset: int, frame_index: int, channel: int, samples: bytes, *, v
     header = bytearray(144)
     struct.pack_into("<I", header, 0, offset)
     struct.pack_into("<HHHI", header, 28, size, channel, len(samples), frame_index)
-    struct.pack_into("<f", header, 64, 40.0)    # depth feet
-    struct.pack_into("<f", header, 100, 4.0)    # GPS knots
+    struct.pack_into("<f", header, 64, 40.0)
+    struct.pack_into("<f", header, 100, 4.0)
     east, north = _sl2_coordinate_values(12.34, 76.78)
     struct.pack_into("<ii", header, 108, east, north)
     struct.pack_into("<ffH", header, 124, 15.0, math.radians(90), 0x0010 | 0x0200 | 0x0100 | 0x0002 if valid_nav else 0)
@@ -96,13 +96,14 @@ def test_extract_sl2_builds_waterfall_and_refuses_missing_navigation(tmp_path: P
 
 
 @pytest.mark.parametrize("suffix, writer", [(".jsf", _write_jsf), (".sl2", _write_sl2)])
-def test_inspection_uses_vendor_extraction(tmp_path: Path, suffix: str, writer):
+def test_inspection_warns_when_vendor_range_metadata_is_unvalidated(tmp_path: Path, suffix: str, writer):
     source = tmp_path / f"survey{suffix}"
     writer(source)
     qc, extraction = inspect_file("survey-vendor", source, source.name, tmp_path / "artifacts")
     assert extraction is not None
     assert qc.ping_count == 2
-    assert qc.status == "PASS"
+    assert qc.status == "WARNING"
+    assert any("uncalibrated" in item.lower() for item in qc.recommendations)
 
 
 def test_vendor_parsers_refuse_malformed_records(tmp_path: Path):
