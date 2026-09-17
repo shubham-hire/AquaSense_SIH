@@ -1,8 +1,7 @@
 """Native Triton XTF extraction using pyxtf.
 
-This module deliberately keeps raw data, waterfall imagery, and navigation separate.
-The parser never manufactures a navigation fix: a ping is marked navigable only when
-both coordinates are finite and within WGS-84 bounds.
+Raw data, waterfall imagery, navigation, and measurement metadata remain
+separate. Values are emitted only when observed in source headers.
 """
 from __future__ import annotations
 
@@ -35,10 +34,26 @@ def _finite(value: Any) -> float | None:
         return None
 
 
+def _ping_cross_track_resolution(ping: Any) -> float | None:
+    """Calculate metres per sample from observed XTF channel headers."""
+    resolutions: list[float] = []
+    headers = getattr(ping, "ping_chan_headers", None) or []
+    data_channels = getattr(ping, "data", None) or []
+    for index, channel_header in enumerate(headers):
+        slant_range = _finite(getattr(channel_header, "SlantRange", None))
+        sample_count = _finite(getattr(channel_header, "NumSamples", None))
+        if (sample_count is None or sample_count <= 0) and index < len(data_channels):
+            sample_count = float(np.asarray(data_channels[index]).size)
+        if slant_range is not None and slant_range > 0 and sample_count is not None and sample_count > 0:
+            resolutions.append(slant_range / sample_count)
+    if not resolutions:
+        return None
+    return float(np.median(np.asarray(resolutions, dtype=np.float64)))
+
+
 def _navigation_record(ping: Any, index: int) -> dict[str, Any]:
     latitude = _finite(getattr(ping, "SensorYcoordinate", None))
     longitude = _finite(getattr(ping, "SensorXcoordinate", None))
-    # Vendors conventionally use 0,0 as a missing sensor fix. Do not report it.
     valid_fix = (
         latitude is not None and longitude is not None and -90 <= latitude <= 90
         and -180 <= longitude <= 180 and (latitude != 0 or longitude != 0)
@@ -57,6 +72,7 @@ def _navigation_record(ping: Any, index: int) -> dict[str, Any]:
         "roll_deg": _finite(getattr(ping, "SensorRoll", None)),
         "heave_m": _finite(getattr(ping, "Heave", None)),
         "speed_mps": _finite(getattr(ping, "SensorSpeed", None)),
+        "cross_track_resolution_m_per_pixel": _ping_cross_track_resolution(ping),
     }
 
 
@@ -76,8 +92,6 @@ def _channel_image(pyxtf: Any, header: Any, pings: list[Any], channel: int) -> n
     try:
         return np.asarray(pyxtf.concatenate_channel(pings.copy(), file_header=header, channel=channel, weighted=False))
     except (IndexError, RuntimeError, ValueError):
-        # Some vendor files have inconsistent channels. Keep rows with this channel
-        # and pad the rest; this preserves observed samples without interpolation.
         samples = [np.asarray(ping.data[channel]).ravel() for ping in pings if len(getattr(ping, "data", [])) > channel]
         if not samples:
             return None
@@ -89,10 +103,10 @@ def _channel_image(pyxtf: Any, header: Any, pings: list[Any], channel: int) -> n
 
 
 def extract_xtf(source: Path, artifact_dir: Path) -> dict[str, Any]:
-    """Extract side-scan channels, waterfall PNG and per-ping nav from an XTF file."""
+    """Extract side-scan channels, waterfall PNG, nav, and XTF resolution."""
     try:
         import pyxtf
-    except ImportError as exc:  # pragma: no cover - dependency is required in production
+    except ImportError as exc:  # pragma: no cover
         raise RuntimeError("pyxtf is required to ingest .xtf files") from exc
 
     try:
@@ -117,6 +131,15 @@ def extract_xtf(source: Path, artifact_dir: Path) -> dict[str, Any]:
     waterfall_path = artifact_dir / "waterfall.png"
     Image.fromarray(display, mode="L").save(waterfall_path)
     navigation = [_navigation_record(ping, index) for index, ping in enumerate(pings)]
+    observed_resolutions = [
+        item["cross_track_resolution_m_per_pixel"]
+        for item in navigation
+        if item["cross_track_resolution_m_per_pixel"] is not None
+    ]
+    source_resolution = (
+        float(np.median(np.asarray(observed_resolutions, dtype=np.float64)))
+        if observed_resolutions else None
+    )
     row_means = display.mean(axis=1)
     std = max(float(row_means.std()), 1.0)
     motion_rows = np.where(np.abs(row_means - row_means.mean()) > 3 * std)[0].astype(int).tolist()
@@ -126,6 +149,8 @@ def extract_xtf(source: Path, artifact_dir: Path) -> dict[str, Any]:
         "sonar_channels": int(getattr(header, "NumberOfSonarChannels", 0)),
         "waterfall_path": str(waterfall_path),
         "waterfall_shape": [int(display.shape[0]), int(display.shape[1])],
+        "cross_track_resolution_m_per_pixel": source_resolution,
+        "measurement_source": "xtf_channel_slant_range" if source_resolution is not None else "unavailable",
         "dynamic_range_db": round(float(np.percentile(display, 99) - np.percentile(display, 1)), 2),
         "speckle_index": round(float(display.std() / max(display.mean(), 1.0)), 3),
         "motion_artifact_rows": motion_rows,
