@@ -1,6 +1,12 @@
-import math
+from pathlib import Path
 
+import math
+import numpy as np
+from PIL import Image
+
+from app.detector import RawDetection
 from app.geolocation import destination_point, geolocate_detection
+import app.pipeline as pipeline
 
 
 def _nav(**updates):
@@ -67,3 +73,58 @@ def test_destination_point_preserves_origin_at_zero_distance():
     latitude, longitude = destination_point(12.34, 76.78, 123, 0)
     assert math.isclose(latitude, 12.34)
     assert math.isclose(longitude, 76.78)
+
+
+class _Config:
+    tile_size = 64
+    batch_size = 1
+    model_path = Path("/missing/test-best.pt")
+
+
+class _Adapter:
+    is_ready = True
+    config = _Config()
+
+    def run_batch(self, tiles, resolution_m_per_px=None):
+        return [[RawDetection(
+            tile_index=0,
+            class_id=3,
+            classification="ghost_net",
+            raw_logit=0.9,
+            confidence_percent=90,
+            box_xywh_norm=(0.75, 0.5, 0.1, 0.1),
+            x_norm=0.70,
+            y_norm=0.45,
+            width_m=0.64,
+            height_m=0.64,
+            model_version="test-model",
+        )]]
+
+
+def test_pipeline_uses_projected_target_location(tmp_path, monkeypatch):
+    source = tmp_path / "waterfall.png"
+    Image.fromarray(np.zeros((64, 64), dtype=np.uint8)).save(source)
+    monkeypatch.setattr(pipeline, "get_adapter", lambda: _Adapter())
+    extraction = {
+        "waterfall_path": str(source),
+        "cross_track_resolution_m_per_pixel": 1.0,
+        "navigation": [{
+            **_nav(),
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "ping_index": 0,
+        }],
+    }
+    detections = pipeline.run_pipeline(
+        "survey-geo",
+        source,
+        {"resolution_meters_per_pixel": 0.1, "motion_artifact_rows": []},
+        False,
+        extraction,
+    )
+    assert len(detections) == 1
+    detection = detections[0]
+    assert detection["position"]["position_source"] == "GPS_FIX"
+    assert detection["position"]["longitude"] > 77.0
+    assert detection["provenance"]["position_method"] == "heading_cross_track_projection"
+    assert detection["provenance"]["side"] == "starboard"
+    assert detection["provenance"]["cross_track_m"] == 16.0
