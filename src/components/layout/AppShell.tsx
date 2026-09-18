@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSurveyStore } from '../../store/useSurveyStore';
 import { useLiveDetectionSocket } from '../../services/socket';
+import { fetchPersistedSurveys, fetchSurveyDetections } from '../../services/api';
 import { InteractiveCursor } from '../shared/InteractiveCursor';
 import { 
   Radar, 
@@ -28,10 +29,39 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setIsLiveStreaming,
     resetStream,
     detections,
+    hydrateSurveys,
+    replaceSurveyDetections,
   } = useSurveyStore();
 
   // Initialize live streaming synchronization hook
   useLiveDetectionSocket();
+
+  // The browser store is ephemeral; restore the mission index and its active
+  // detection set from SQLite whenever the app opens or an operator switches missions.
+  useEffect(() => {
+    let cancelled = false;
+    fetchPersistedSurveys()
+      .then((persisted) => {
+        if (!cancelled) hydrateSurveys(persisted);
+      })
+      .catch(() => {
+        // The landing page remains usable when the local API is not running.
+      });
+    return () => { cancelled = true; };
+  }, [hydrateSurveys]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activeSurveyId === 'SURVEY-NEW' || isLiveStreaming) return undefined;
+    fetchSurveyDetections(activeSurveyId)
+      .then((persisted) => {
+        if (!cancelled) replaceSurveyDetections(activeSurveyId, persisted);
+      })
+      .catch(() => {
+        // A just-created mission may not have completed ingestion yet.
+      });
+    return () => { cancelled = true; };
+  }, [activeSurveyId, isLiveStreaming, replaceSurveyDetections]);
 
   const activeSurvey = surveys.find((s) => s.id === activeSurveyId) ?? null;
 

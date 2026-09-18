@@ -132,7 +132,13 @@ async def ingest_survey(survey_id: str, file: UploadFile = File(...)) -> dict:
     except ValueError as exc:
         destination.unlink(missing_ok=True)
         raise HTTPException(422, str(exc)) from exc
-    repository.save_ingest(survey_id, str(destination), qc.model_dump(mode="json"), extraction)
+    repository.save_ingest(
+        survey_id,
+        str(destination),
+        qc.model_dump(mode="json"),
+        extraction,
+        file.filename or destination.name,
+    )
     return {
         "survey_id": survey_id,
         "qc_report": qc,
@@ -143,6 +149,12 @@ async def ingest_survey(survey_id: str, file: UploadFile = File(...)) -> dict:
 def _collect_pipeline_results(survey_id: str, source_path: str, qc: dict, dsp_applied: bool, extraction: dict | None) -> list[dict]:
     """Run CPU/GPU-bound inference outside the asyncio event-loop thread."""
     return list(iter_pipeline(survey_id, Path(source_path), qc, dsp_applied, extraction))
+
+
+@app.get("/v1/surveys")
+def list_surveys() -> list[dict]:
+    """List persisted missions so the UI can restore them after a restart."""
+    return repository.surveys()
 
 
 async def _process_in_background(survey_id: str, source_path: str, qc: dict, extraction: dict | None, dsp_applied: bool) -> None:

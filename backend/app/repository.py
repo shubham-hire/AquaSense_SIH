@@ -19,6 +19,7 @@ class Repository:
     def connection(self):
         connection = sqlite3.connect(self.database_path)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
         try:
             yield connection
             connection.commit()
@@ -53,18 +54,43 @@ class Repository:
             if "extraction_json" not in columns:
                 conn.execute("ALTER TABLE surveys ADD COLUMN extraction_json TEXT")
 
-    def ensure_survey(self, survey_id: str) -> None:
-        from datetime import datetime, timezone
+    def ensure_survey(self, survey_id: str, name: str | None = None) -> None:
         with self.connection() as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO surveys (id, name, created_at) VALUES (?, ?, ?)",
-                (survey_id, survey_id, datetime.now(timezone.utc).isoformat()),
+                (survey_id, name or survey_id, datetime.now(timezone.utc).isoformat()),
             )
 
-    def save_ingest(self, survey_id: str, source_path: str, qc: dict, extraction: dict | None = None) -> None:
-        self.ensure_survey(survey_id)
+    def save_ingest(self, survey_id: str, source_path: str, qc: dict, extraction: dict | None = None, name: str | None = None) -> None:
+        self.ensure_survey(survey_id, name)
         with self.connection() as conn:
-            conn.execute("UPDATE surveys SET source_path=?, qc_json=?, extraction_json=? WHERE id=?", (source_path, json.dumps(qc), json.dumps(extraction) if extraction else None, survey_id))
+            conn.execute(
+                "UPDATE surveys SET name=?, source_path=?, qc_json=?, extraction_json=? WHERE id=?",
+                (name or survey_id, source_path, json.dumps(qc), json.dumps(extraction) if extraction else None, survey_id),
+            )
+
+    def surveys(self) -> list[dict]:
+        """Return persisted mission metadata without exposing local file paths."""
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT s.id, s.name, s.created_at, s.qc_json, COUNT(d.id) AS detection_count
+                FROM surveys AS s
+                LEFT JOIN detections AS d ON d.survey_id = s.id
+                GROUP BY s.id
+                ORDER BY s.created_at DESC
+                """
+            ).fetchall()
+        return [
+            {
+                "survey_id": row["id"],
+                "name": row["name"],
+                "created_at": row["created_at"],
+                "qc_report": json.loads(row["qc_json"]) if row["qc_json"] else None,
+                "detection_count": row["detection_count"],
+            }
+            for row in rows
+        ]
 
     def ingest_info(self, survey_id: str) -> tuple[str, dict, dict | None] | None:
         with self.connection() as conn:
@@ -143,4 +169,3 @@ class Repository:
                 (survey_id,),
             ).fetchall()
         return {row["detection_id"]: json.loads(row["review_json"]) for row in rows}
-

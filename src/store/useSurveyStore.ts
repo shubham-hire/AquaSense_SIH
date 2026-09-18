@@ -13,6 +13,7 @@ interface SurveyState {
   detections: Detection[];
   selectedDetectionId: string | null;
   ensureSurvey: (survey: SurveyMission) => void;
+  hydrateSurveys: (surveys: SurveyMission[]) => void;
   setActiveSurveyId: (id: string) => void;
   setSelectedDetectionId: (id: string | null) => void;
   waterfallPalette: SonarColormap;
@@ -77,6 +78,17 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
         : [...state.surveys, survey],
       activeSurveyId: survey.id,
     })),
+  hydrateSurveys: (incoming) =>
+    set((state) => {
+      const incomingIds = new Set(incoming.map((survey) => survey.id));
+      const surveys = [...incoming, ...state.surveys.filter((survey) => !incomingIds.has(survey.id))];
+      return {
+        surveys,
+        activeSurveyId: surveys.some((survey) => survey.id === state.activeSurveyId)
+          ? state.activeSurveyId
+          : surveys[0]?.id ?? DEFAULT_SURVEY_ID,
+      };
+    }),
   setActiveSurveyId: (id) => {
     const matched = get().detections.filter((d) => d.surveyId === id);
     set({ activeSurveyId: id, selectedDetectionId: matched[0]?.id ?? null });

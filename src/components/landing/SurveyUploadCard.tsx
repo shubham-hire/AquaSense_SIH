@@ -4,6 +4,13 @@ import { useSurveyStore, DEFAULT_SURVEY_ID } from '../../store/useSurveyStore';
 import { UploadCloud, Waves, ArrowRight, AlertCircle, LoaderCircle } from 'lucide-react';
 import { fetchSurveyNavigation, ingestAndProcessSurvey } from '../../services/api';
 
+function createSurveyId(): string {
+  const uniquePart = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10);
+  return `survey-${Date.now().toString(36)}-${uniquePart}`;
+}
+
 export const SurveyUploadCard: React.FC = () => {
   const navigate = useNavigate();
   const {
@@ -17,6 +24,7 @@ export const SurveyUploadCard: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [surveyId, setSurveyId] = useState(createSurveyId);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qcSummary, setQcSummary] = useState<string | null>(null);
@@ -33,6 +41,7 @@ export const SurveyUploadCard: React.FC = () => {
   };
 
   const selectFile = (file: File) => {
+    setSurveyId(createSurveyId());
     setSelectedFile(file);
     setUploadedFileName(file.name);
     setError(null);
@@ -55,8 +64,6 @@ export const SurveyUploadCard: React.FC = () => {
       selectFile(e.dataTransfer.files[0]);
     }
   };
-
-  const surveyId = activeSurveyId || DEFAULT_SURVEY_ID;
 
   const startProcessing = async () => {
     if (!selectedFile) {

@@ -1,4 +1,4 @@
-import type { Detection, ReviewDecision, ReviewOutcome, SurveyNavigation } from '../types';
+import type { Detection, ReviewDecision, ReviewOutcome, SurveyMission, SurveyNavigation } from '../types';
 
 /**
  * Local Vite development proxies `/api` to FastAPI. On Vercel, set
@@ -67,6 +67,45 @@ export async function ingestAndProcessSurvey(surveyId: string, file: File): Prom
 export async function fetchSurveyDetections(surveyId: string): Promise<Detection[]> {
   const payload = await request<BackendDetection[]>(`/v1/surveys/${encodeURIComponent(surveyId)}/detections`);
   return payload.map(toFrontendDetection);
+}
+
+interface BackendSurvey {
+  survey_id: string;
+  name: string;
+  created_at: string;
+  detection_count: number;
+  qc_report: BackendQcReport | null;
+}
+
+/** Restore persisted mission metadata after the browser or API restarts. */
+export async function fetchPersistedSurveys(): Promise<SurveyMission[]> {
+  const payload = await request<BackendSurvey[]>('/v1/surveys');
+  return payload.map((survey) => ({
+    id: survey.survey_id,
+    codeName: `UPLOAD-${survey.survey_id}`,
+    name: survey.name,
+    vesselName: 'Not provided',
+    vehicleType: 'Uploaded survey',
+    areaSqKm: 0,
+    swathWidthMeters: 0,
+    status: 'Completed',
+    startTime: survey.created_at,
+    locationName: 'Navigation available per survey',
+    centerCoordinates: [0, 0],
+    trackPoints: [],
+    frequencyKhz: 0,
+    summaryMetrics: {
+      totalPings: survey.qc_report?.ping_count ?? 0,
+      candidateCount: survey.detection_count,
+      verifiedCount: survey.detection_count,
+      rejectedCount: 0,
+      unlocatedCount: 0,
+      uncalibratedCount: 0,
+      lowQualityCount: 0,
+      avgConfidencePercent: 0,
+      precisionGainPercent: 0,
+    },
+  }));
 }
 
 interface BackendNavigationPoint {
