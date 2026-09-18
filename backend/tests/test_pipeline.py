@@ -1,9 +1,12 @@
 from app.pipeline import inspect_file, run_pipeline
 
 
-def test_pipeline_never_fabricates_coordinates_for_image_upload(tmp_path):
+def test_pipeline_never_fabricates_coordinates_for_image_upload(tmp_path, monkeypatch):
     # A minimal valid PNG header/image is more reliable than a vendor sonar fixture.
     from PIL import Image
+    # This case runs without model weights, so synthetic output must be opted
+    # into explicitly; the pipeline otherwise refuses to fabricate detections.
+    monkeypatch.setenv("AQUASENSE_ALLOW_SYNTHETIC_FALLBACK", "1")
     source = tmp_path / "survey.png"
     Image.new("L", (16, 16), color=80).save(source)
     qc, extraction = inspect_file("survey-1", source, "survey.png")
