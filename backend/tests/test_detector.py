@@ -25,6 +25,7 @@ from app.detector import (
     Yolo26Adapter,
     get_adapter,
 )
+from app.taxonomy import MODEL_CLASS_NAMES
 
 
 # ---------------------------------------------------------------------------
@@ -184,16 +185,8 @@ class TestRawDetectionSizing:
 # ---------------------------------------------------------------------------
 
 class TestClassNames:
-    def test_all_six_ps26057_classes_present(self):
-        expected = {
-            "human_artifact_wreck",
-            "electrical_cable",
-            "electronic_hazard",
-            "plastic_debris",
-            "metal_drum_scrap",
-            "biological_geological_exclusion",
-        }
-        assert set(CLASS_NAMES.values()) == expected
+    def test_all_seven_production_classes_present(self):
+        assert tuple(CLASS_NAMES.values()) == MODEL_CLASS_NAMES
 
     def test_indices_are_zero_based_contiguous(self):
         assert sorted(CLASS_NAMES.keys()) == list(range(len(CLASS_NAMES)))

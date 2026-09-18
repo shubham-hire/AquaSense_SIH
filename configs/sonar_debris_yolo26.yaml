@@ -7,15 +7,17 @@ train: images/train
 val: images/val
 test: images/test
 
-# Debris Classes
+# Debris Classes. This is a checked mirror of backend/app/taxonomy.py;
+# the regression test prevents it drifting from the production checkpoint.
 names:
-  0: human_artifact_wreck
-  1: electrical_cable
-  2: electronic_hazard
-  3: plastic_debris
-  4: metal_drum_scrap
-  5: biological_geological_exclusion
+  0: shipwreck
+  1: submarine_pipeline
+  2: cylinder
+  3: ghost_net
+  4: ghost_pot_trap
+  5: plastic_debris
+  6: metal_debris
 
 # Metadata
-nc: 6
+nc: 7
 description: "Acoustic side-scan sonar dataset combining MILCO/NOMBO, Seabed Objects-KLSG, AI4Shipwrecks, and synthetic ghost-gear composites"

@@ -35,20 +35,9 @@ from typing import Literal
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
+from .taxonomy import CLASS_NAMES
 
-# ---------------------------------------------------------------------------
-# Class-index → PS 26057 class-name mapping
-# Must match the order used during training (sonar_debris_yolo26.yaml `names`).
-# ---------------------------------------------------------------------------
-CLASS_NAMES: dict[int, str] = {
-    0: "human_artifact_wreck",
-    1: "electrical_cable",
-    2: "electronic_hazard",
-    3: "plastic_debris",
-    4: "metal_drum_scrap",
-    5: "biological_geological_exclusion",
-}
+logger = logging.getLogger(__name__)
 
 # Minimum physical size (metres) for a valid detection.
 # Candidates smaller than this are treated as noise artefacts.

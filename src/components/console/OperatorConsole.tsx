@@ -1,5 +1,7 @@
 import React from 'react';
+import { useSurveyStore } from '../../store/useSurveyStore';
 import { SonarWaterfallPanel } from '../sonar/SonarWaterfallPanel';
+import { DetectionImageViewer } from './DetectionImageViewer';
 import { LiveMapPanel } from '../map/LiveMapPanel';
 import { DigitalTwinPanel } from '../three/DigitalTwinPanel';
 import { DetectionQueue } from './DetectionQueue';
@@ -7,6 +9,12 @@ import { ThresholdControls } from './ThresholdControls';
 import { RefusalStrip } from './RefusalStrip';
 
 export const OperatorConsole: React.FC = () => {
+  const { uploadedImageUrl } = useSurveyStore();
+
+  // If the user uploaded a plain image file, show it with bounding boxes instead of
+  // the XTF waterfall panel (which requires the backend to produce a waterfall.png).
+  const showImageViewer = Boolean(uploadedImageUrl);
+
   return (
     <div className="flex-1 min-h-0 flex flex-col p-4 gap-3 overflow-y-auto bg-[#111A2A]">
       {/* Operator Threshold & Class Filter Controls */}
@@ -14,8 +22,12 @@ export const OperatorConsole: React.FC = () => {
 
       {/* Main 4-Quadrant Tactical Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-1 min-h-[700px]">
-        {/* Top-Left: Sonar Waterfall Swath with Calipers */}
-        <SonarWaterfallPanel className="min-h-[380px]" />
+        {/* Top-Left: Uploaded Image Viewer OR Sonar Waterfall Swath */}
+        {showImageViewer ? (
+          <DetectionImageViewer className="min-h-[380px]" />
+        ) : (
+          <SonarWaterfallPanel className="min-h-[380px]" />
+        )}
 
         {/* Top-Right: 3D Digital Twin with Instanced Threat Beacons */}
         <DigitalTwinPanel className="min-h-[380px]" />

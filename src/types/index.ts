@@ -29,10 +29,12 @@ export type DetectionClass =
   | 'geological_formation';
 
 export interface BoundingBox {
-  x: number;          // 0 to 1 normalized or pixel coordinate
-  y: number;
+  x: number;          // normalized centre X, retained for map/mission use
+  y: number;          // normalized centre Y, retained for map/mission use
   widthM: number;     // Real-world width in meters (PS-required)
   heightM: number;    // Real-world height in meters (PS-required)
+  /** Normalized source-image box for exact image overlays. */
+  imageBox?: { left: number; top: number; width: number; height: number } | null;
 }
 
 export interface ContourPoint {

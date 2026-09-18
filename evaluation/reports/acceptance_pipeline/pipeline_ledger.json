@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-09-14T20:34:09Z",
+  "model_path": "/Users/shubham/Desktop/SIH2027/AquaSense/Main/models_checkpoints/yolo26n_aquasense_marine.pt",
+  "stages_executed": [
+    "validate",
+    "eval",
+    "calibrate",
+    "profile"
+  ],
+  "is_mock": true,
+  "validation": {
+    "timestamp": "2026-09-14T20:34:09Z",
+    "model_path": "/Users/shubham/Desktop/SIH2027/AquaSense/Main/models_checkpoints/yolo26n_aquasense_marine.pt",
+    "file_exists": true,
+    "file_size_mb": 5.21,
+    "is_nano_envelope": true,
+    "param_count": 2591010,
+    "format": "pytorch_pt",
+    "taxonomy_status": "6_class_baseline",
+    "num_classes": 6,
+    "classes": {
+      "0": "human_artifact_wreck",
+      "1": "electrical_cable",
+      "2": "electronic_hazard",
+      "3": "plastic_debris",
+      "4": "metal_drum_scrap",
+      "5": "biological_geological_exclusion"
+    },
+    "has_ghost_gear_class": false,
+    "test_tile_passed": true,
+    "latency_ms": 890.63,
+    "detections_count": 0,
+    "checks_passed": true,
+    "errors": [],
+    "warnings": [
+      "Model has 6 baseline classes (legacy). Ready for operation or retraining to 7 classes with ghost gear."
+    ]
+  },
+  "evaluation": {
+    "macro": {
+      "precision": 0.1429,
+      "recall": 0.1429,
+      "f1": 0.1429,
+      "mAP50": 0.1429,
+      "mAP50_95": 0.1429
+    },
+    "tile_latency_p95_ms": 18.2,
+    "mission_latency_p95_ms": 18.2
+  },
+  "calibration": {
+    "platt_A": -4.4127,
+    "platt_B": 2.84967,
+    "formula": "P(target=1 | conf) = 1 / (1 + exp(A * conf + B))",
+    "metrics": {
+      "uncalibrated_ece": 0.141,
+      "calibrated_ece": 0.0456,
+      "ece_improvement_pct": 67.66,
+      "uncalibrated_brier": 0.2256,
+      "calibrated_brier": 0.2056
+    }
+  },
+  "deployment": {
+    "edge_assessment": {
+      "target_latency_budget_ms": 30.0,
+      "single_tile_640_latency_ms": 45.62,
+      "sub_30ms_achieved": false,
+      "target_power_envelope_watts": 10.0,
+      "recommended_jetson_mode": "FP16 (half-precision via TensorRT / trtexec)"
+    },
+    "onnx_export_success": true
+  },
+  "all_stages_passed": true
+}

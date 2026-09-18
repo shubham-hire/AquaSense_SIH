@@ -1,0 +1,96 @@
+{
+  "conf_threshold": 0.25,
+  "macro": {
+    "precision": 0.1429,
+    "recall": 0.1429,
+    "f1": 0.1429,
+    "mAP50": 0.1429,
+    "mAP50_95": 0.1429
+  },
+  "per_class": {
+    "human_artifact_wreck": {
+      "class_name": "human_artifact_wreck",
+      "n_gt": 0,
+      "n_pred": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "ap50": 0.0
+    },
+    "electrical_cable": {
+      "class_name": "electrical_cable",
+      "n_gt": 0,
+      "n_pred": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "ap50": 0.0
+    },
+    "electronic_hazard": {
+      "class_name": "electronic_hazard",
+      "n_gt": 0,
+      "n_pred": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "ap50": 0.0
+    },
+    "plastic_debris": {
+      "class_name": "plastic_debris",
+      "n_gt": 0,
+      "n_pred": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "ap50": 0.0
+    },
+    "metal_drum_scrap": {
+      "class_name": "metal_drum_scrap",
+      "n_gt": 0,
+      "n_pred": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "ap50": 0.0
+    },
+    "biological_geological_exclusion": {
+      "class_name": "biological_geological_exclusion",
+      "n_gt": 0,
+      "n_pred": 0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "ap50": 0.0
+    },
+    "ghost_gear": {
+      "class_name": "ghost_gear",
+      "n_gt": 1,
+      "n_pred": 1,
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "ap50": 1.0
+    }
+  }
+}

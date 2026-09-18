@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-09-14T20:31:32Z",
+  "model_path": "/Users/shubham/Desktop/SIH2027/AquaSense/Main/models_checkpoints/yolo26n_aquasense_marine.pt",
+  "device": "cpu",
+  "edge_budget_assessment": {
+    "target_latency_budget_ms": 30.0,
+    "single_tile_640_latency_ms": 43.62,
+    "sub_30ms_achieved": false,
+    "target_power_envelope_watts": 10.0,
+    "recommended_jetson_mode": "FP16 (half-precision via TensorRT / trtexec)"
+  },
+  "sweeps": [
+    {
+      "tile_size": 512,
+      "batch_size": 1,
+      "device": "cpu",
+      "iterations": 10,
+      "mean_latency_ms": 30.39,
+      "p50_ms": 30.06,
+      "p95_ms": 33.95,
+      "p99_ms": 33.95,
+      "min_ms": 29.05,
+      "max_ms": 33.95,
+      "throughput_fps": 32.91,
+      "per_tile_latency_ms": 30.39
+    },
+    {
+      "tile_size": 512,
+      "batch_size": 4,
+      "device": "cpu",
+      "iterations": 10,
+      "mean_latency_ms": 144.47,
+      "p50_ms": 145.66,
+      "p95_ms": 150.22,
+      "p99_ms": 150.22,
+      "min_ms": 138.75,
+      "max_ms": 150.22,
+      "throughput_fps": 27.69,
+      "per_tile_latency_ms": 36.12
+    },
+    {
+      "tile_size": 640,
+      "batch_size": 1,
+      "device": "cpu",
+      "iterations": 10,
+      "mean_latency_ms": 43.62,
+      "p50_ms": 43.03,
+      "p95_ms": 50.85,
+      "p99_ms": 50.85,
+      "min_ms": 42.24,
+      "max_ms": 50.85,
+      "throughput_fps": 22.92,
+      "per_tile_latency_ms": 43.62
+    },
+    {
+      "tile_size": 640,
+      "batch_size": 4,
+      "device": "cpu",
+      "iterations": 10,
+      "mean_latency_ms": 155.62,
+      "p50_ms": 155.58,
+      "p95_ms": 158.05,
+      "p99_ms": 158.05,
+      "min_ms": 153.25,
+      "max_ms": 158.05,
+      "throughput_fps": 25.7,
+      "per_tile_latency_ms": 38.91
+    }
+  ],
+  "onnx_export": {
+    "onnx_export_success": true,
+    "onnx_path": "/Users/shubham/Desktop/SIH2027/AquaSense/Main/models_checkpoints/yolo26n_aquasense_marine.onnx",
+    "onnx_file_size_mb": 10.12,
+    "onnx_runtime_verified": true,
+    "onnx_mean_latency_ms": 32.59,
+    "onnx_fps": 30.68,
+    "error": null
+  }
+}

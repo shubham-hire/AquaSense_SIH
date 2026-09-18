@@ -4,14 +4,15 @@ import { useSurveyStore } from '../../store/useSurveyStore';
 import { submitReview, deleteReview } from '../../services/api';
 import type { ReviewOutcome } from '../../types';
 
-// The 6 canonical classes from configs/sonar_debris_yolo26.yaml
+// Must match backend/app/taxonomy.py and configs/sonar_debris_yolo26.yaml.
 const CLASS_OPTIONS = [
-  { value: 'human_artifact_wreck',         label: 'Human Artifact / Wreck' },
-  { value: 'electrical_cable',             label: 'Electrical Cable' },
-  { value: 'electronic_hazard',            label: 'Electronic Hazard' },
-  { value: 'plastic_debris',              label: 'Plastic Debris' },
-  { value: 'metal_drum_scrap',            label: 'Metal Drum / Scrap' },
-  { value: 'biological_geological_exclusion', label: 'Biological / Geological' },
+  { value: 'shipwreck', label: 'Shipwreck' },
+  { value: 'submarine_pipeline', label: 'Submarine Pipeline' },
+  { value: 'cylinder', label: 'Cylinder' },
+  { value: 'ghost_net', label: 'Ghost Net' },
+  { value: 'ghost_pot_trap', label: 'Ghost Pot / Trap' },
+  { value: 'plastic_debris', label: 'Plastic Debris' },
+  { value: 'metal_debris', label: 'Metal Debris' },
 ];
 
 const OUTCOME_STYLES: Record<ReviewOutcome, { bg: string; border: string; text: string; icon: React.ReactNode; label: string }> = {

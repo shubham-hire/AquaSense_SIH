@@ -6,11 +6,26 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+class ImageBox(BaseModel):
+    """Top-left normalized box used to render a detection on its source image."""
+    left: float = Field(ge=0, le=1)
+    top: float = Field(ge=0, le=1)
+    width: float = Field(ge=0, le=1)
+    height: float = Field(ge=0, le=1)
+
+
 class BoundingBox(BaseModel):
+    """Detection geometry.
+
+    ``x`` and ``y`` are the normalized centre of the detection and the metre
+    fields are measurement data.  ``image_box`` is deliberately separate so a
+    client never has to mistake a physical measurement for screen pixels.
+    """
     x: float = Field(ge=0)
     y: float = Field(ge=0)
     width_m: float = Field(gt=0)
     height_m: float = Field(gt=0)
+    image_box: ImageBox | None = None
 
 
 class Position(BaseModel):
@@ -126,4 +141,3 @@ class QcReport(BaseModel):
     resolution_meters_per_pixel: float = Field(gt=0)
     status: Literal["PASS", "WARNING", "CORRUPTED"]
     recommendations: list[str]
-

@@ -102,7 +102,13 @@ export function toFrontendDetection(detection: BackendDetection): Detection {
     classification: detection.classification,
     classNameLabel: detection.classification.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
     confidencePercent: detection.confidence_percent,
-    boundingBox: { x: detection.bounding_box.x, y: detection.bounding_box.y, widthM: detection.bounding_box.width_m, heightM: detection.bounding_box.height_m },
+    boundingBox: {
+      x: detection.bounding_box.x,
+      y: detection.bounding_box.y,
+      widthM: detection.bounding_box.width_m,
+      heightM: detection.bounding_box.height_m,
+      imageBox: detection.bounding_box.image_box ?? null,
+    },
     segmentationMask: detection.segmentation_mask,
     position: detection.position.position_source === 'GPS_FIX'
       ? { kind: 'located', lat: detection.position.latitude!, lng: detection.position.longitude! }
@@ -134,7 +140,10 @@ export function toFrontendDetection(detection: BackendDetection): Detection {
 
 export interface BackendDetection {
   id: string; survey_id: string; classification: string; confidence_percent: number;
-  bounding_box: { x: number; y: number; width_m: number; height_m: number };
+  bounding_box: {
+    x: number; y: number; width_m: number; height_m: number;
+    image_box?: { left: number; top: number; width: number; height: number } | null;
+  };
   segmentation_mask: { type: 'polygon' | 'rle'; data: number[][] } | null;
   position: { latitude: number | null; longitude: number | null; position_source: 'GPS_FIX' | 'UNAVAILABLE'; refusal_reason: string | null };
   calibrated: boolean; low_data_quality: boolean; motion_uncorrected: boolean; model_version: string;

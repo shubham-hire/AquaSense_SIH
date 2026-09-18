@@ -33,7 +33,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   // Initialize live streaming synchronization hook
   useLiveDetectionSocket();
 
-  const activeSurvey = surveys.find((s) => s.id === activeSurveyId) || surveys[0];
+  const activeSurvey = surveys.find((s) => s.id === activeSurveyId) ?? null;
 
   const handleToggleMode = () => {
     if (mode === 'operator') {
@@ -76,35 +76,41 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
           <div className="h-6 w-[1px] bg-slate-700/60 mx-1 hidden md:block" />
 
-          {/* Active Survey Selector Dropdown */}
-          <div className="relative hidden md:block">
-            <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs">
-              <span className="text-slate-400 font-mono">MISSION:</span>
-              <select
-                value={activeSurveyId}
-                onChange={(e) => setActiveSurveyId(e.target.value)}
-                className="bg-transparent text-cyan-200 font-medium font-sans focus:outline-none cursor-pointer pr-4"
-              >
-                {surveys.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-slate-900 text-white">
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+          {/* Active Survey Selector Dropdown — only shown when surveys exist */}
+          {surveys.length > 0 && (
+            <div className="relative hidden md:block">
+              <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs">
+                <span className="text-slate-400 font-mono">MISSION:</span>
+                <select
+                  value={activeSurveyId}
+                  onChange={(e) => setActiveSurveyId(e.target.value)}
+                  className="bg-transparent text-cyan-200 font-medium font-sans focus:outline-none cursor-pointer pr-4"
+                >
+                  {surveys.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Center: Live Processing Telemetry */}
         <div className="hidden lg:flex items-center gap-4 bg-slate-950/60 border border-cyan-500/20 px-4 py-1.5 rounded-full text-xs font-mono">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-300">{activeSurvey.vesselName}</span>
+            <span className={`w-2 h-2 rounded-full ${activeSurvey ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+            <span className="text-slate-300">{activeSurvey ? activeSurvey.vesselName : 'No active mission'}</span>
           </div>
           <span className="text-slate-600">|</span>
-          <span className="text-slate-400">{activeSurvey.frequencyKhz} kHz SSS</span>
+          <span className="text-slate-400">
+            {activeSurvey ? `${activeSurvey.frequencyKhz} kHz SSS` : 'Upload a file to begin'}
+          </span>
           <span className="text-slate-600">|</span>
-          <span className="text-cyan-300">{activeSurvey.summaryMetrics.verifiedCount} Verified Targets</span>
+          <span className="text-cyan-300">
+            {activeSurvey ? `${activeSurvey.summaryMetrics.verifiedCount} Verified Targets` : '—'}
+          </span>
         </div>
 
         {/* Right: Controls & Mode Switcher */}

@@ -1,14 +1,21 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSurveyStore } from '../../store/useSurveyStore';
-import { UploadCloud, FileText, Waves, ArrowRight, AlertCircle, LoaderCircle } from 'lucide-react';
+import { useSurveyStore, DEFAULT_SURVEY_ID } from '../../store/useSurveyStore';
+import { UploadCloud, Waves, ArrowRight, AlertCircle, LoaderCircle } from 'lucide-react';
 import { fetchSurveyNavigation, ingestAndProcessSurvey } from '../../services/api';
 
 export const SurveyUploadCard: React.FC = () => {
   const navigate = useNavigate();
-  const { activeSurveyId, replaceSurveyDetections, setIsLiveStreaming, setSurveyNavigation } = useSurveyStore();
+  const {
+    activeSurveyId,
+    replaceSurveyDetections,
+    setIsLiveStreaming,
+    setSurveyNavigation,
+    setUploadedImageUrl,
+    ensureSurvey,
+  } = useSurveyStore();
   const [dragActive, setDragActive] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +34,17 @@ export const SurveyUploadCard: React.FC = () => {
 
   const selectFile = (file: File) => {
     setSelectedFile(file);
-    setUploadedFile(file.name);
+    setUploadedFileName(file.name);
     setError(null);
     setQcSummary(null);
+    // Revoke the previous blob URL and create a new one for image preview
+    const isImageFile = file.type.startsWith('image/');
+    if (isImageFile) {
+      const url = URL.createObjectURL(file);
+      setUploadedImageUrl(url);
+    } else {
+      setUploadedImageUrl(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -41,24 +56,48 @@ export const SurveyUploadCard: React.FC = () => {
     }
   };
 
-  const handleSimulatedUpload = (name: string) => {
-    setUploadedFile(name);
-  };
+  const surveyId = activeSurveyId || DEFAULT_SURVEY_ID;
 
   const startProcessing = async () => {
     if (!selectedFile) {
-      setError('Choose a sonar file first. Sample mission buttons remain display-only.');
+      setError('Choose a sonar file or image first.');
       return;
     }
     setIsProcessing(true);
     setError(null);
     try {
-      setSurveyNavigation(activeSurveyId, { status: 'loading', mapCenter: null, trackPoints: [] });
-      const qc = await ingestAndProcessSurvey(activeSurveyId, selectedFile);
+      ensureSurvey({
+        id: surveyId,
+        codeName: `UPLOAD-${surveyId}`,
+        name: selectedFile.name,
+        vesselName: 'Not provided',
+        vehicleType: 'Uploaded survey',
+        areaSqKm: 0,
+        swathWidthMeters: 0,
+        status: 'Processing',
+        startTime: new Date().toISOString(),
+        locationName: 'Navigation pending',
+        centerCoordinates: [0, 0],
+        trackPoints: [],
+        frequencyKhz: 0,
+        summaryMetrics: {
+          totalPings: 0,
+          candidateCount: 0,
+          verifiedCount: 0,
+          rejectedCount: 0,
+          unlocatedCount: 0,
+          uncalibratedCount: 0,
+          lowQualityCount: 0,
+          avgConfidencePercent: 0,
+          precisionGainPercent: 0,
+        },
+      });
+      setSurveyNavigation(surveyId, { status: 'loading', mapCenter: null, trackPoints: [] });
+      const qc = await ingestAndProcessSurvey(surveyId, selectedFile);
       try {
-        setSurveyNavigation(activeSurveyId, await fetchSurveyNavigation(activeSurveyId));
+        setSurveyNavigation(surveyId, await fetchSurveyNavigation(surveyId));
       } catch (navigationError) {
-        setSurveyNavigation(activeSurveyId, {
+        setSurveyNavigation(surveyId, {
           status: 'error',
           mapCenter: null,
           trackPoints: [],
@@ -67,9 +106,9 @@ export const SurveyUploadCard: React.FC = () => {
       }
       setQcSummary(`QC ${qc.status}: ${qc.ping_count} pings · ${qc.dropout_ratio_percent}% dropout`);
       // The WebSocket hook replaces the UI as candidates clear verification.
-      replaceSurveyDetections(activeSurveyId, []);
+      replaceSurveyDetections(surveyId, []);
       setIsLiveStreaming(true);
-      navigate(`/surveys/${activeSurveyId}/console`);
+      navigate(`/surveys/${encodeURIComponent(surveyId)}/console`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to process the sonar file.');
     } finally {
@@ -83,11 +122,11 @@ export const SurveyUploadCard: React.FC = () => {
         <div className="flex items-center gap-2">
           <UploadCloud className="w-5 h-5 text-cyan-400" />
           <h3 className="font-heading font-extrabold text-base text-white">
-            RAW SONAR LOG INGESTION (PS 26057 REQUIRED)
+            UPLOAD SURVEY FILE OR IMAGE
           </h3>
         </div>
         <p className="text-xs text-slate-400 mt-1 font-sans">
-          Upload Triton <code className="text-cyan-300 font-mono">.XTF</code>, EdgeTech <code className="text-cyan-300 font-mono">.JSF</code>, Lowrance <code className="text-cyan-300 font-mono">.SL2</code>, or GeoTIFF swath logs for real-time pipeline processing and map overlay.
+          Upload Triton <code className="text-cyan-300 font-mono">.XTF</code>, EdgeTech <code className="text-cyan-300 font-mono">.JSF</code>, Lowrance <code className="text-cyan-300 font-mono">.SL2</code>, GeoTIFF, or any sonar image (PNG / JPG) for AI pipeline detection.
         </p>
       </div>
 
@@ -108,10 +147,10 @@ export const SurveyUploadCard: React.FC = () => {
           <Waves className="w-6 h-6" />
         </div>
         <div className="text-sm font-semibold text-white">
-          {uploadedFile ? `Loaded: ${uploadedFile}` : 'Drag & drop sonar mission file here'}
+          {uploadedFileName ? `Loaded: ${uploadedFileName}` : 'Drag & drop sonar mission file or image here'}
         </div>
         <div className="text-xs text-slate-400 font-mono">
-          Supports .XTF, .JSF, .SL2, GeoTIFF and images up to 500 MB
+          Supports .XTF, .JSF, .SL2, GeoTIFF, PNG, JPG up to 500 MB
         </div>
         <input
           ref={inputRef}
@@ -125,51 +164,13 @@ export const SurveyUploadCard: React.FC = () => {
       {qcSummary && <p className="text-xs font-mono text-emerald-300">{qcSummary}</p>}
       {error && <p className="text-xs font-mono text-rose-300 flex gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" />{error}</p>}
 
-      {/* Preset Indian Ocean Sonar Log Demos */}
-      <div className="space-y-1.5">
-        <div className="text-[11px] font-mono text-slate-400 uppercase">
-          OR LOAD SAMPLE HYDROGRAPHIC MISSION LOG:
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
-          <button
-            onClick={() => handleSimulatedUpload('ORV_Sagar_Nidhi_Swatch_Deep_09.xtf')}
-            className={`p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-              uploadedFile?.includes('Sagar_Nidhi')
-                ? 'bg-cyan-950/60 border-cyan-400/80 text-cyan-200'
-                : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-900'
-            }`}
-          >
-            <div>
-              <div className="font-semibold text-white">ORV_Sagar_Nidhi_09.xtf</div>
-              <div className="text-[10px] text-slate-400">410 kHz EdgeTech Swatch Log (14.8 km²)</div>
-            </div>
-            <FileText className="w-4 h-4 text-cyan-400" />
-          </button>
-
-          <button
-            onClick={() => handleSimulatedUpload('Sagar_Kanya_Gulf_Mannar_MPA.jsf')}
-            className={`p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-              uploadedFile?.includes('Mannar')
-                ? 'bg-cyan-950/60 border-cyan-400/80 text-cyan-200'
-                : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-900'
-            }`}
-          >
-            <div>
-              <div className="font-semibold text-white">Sagar_Kanya_Mannar.jsf</div>
-              <div className="text-[10px] text-slate-400">900 kHz Klein 3900 MPA Coral Log</div>
-            </div>
-            <FileText className="w-4 h-4 text-cyan-400" />
-          </button>
-        </div>
-      </div>
-
       {/* Start Ingestion Button */}
       <button
         onClick={startProcessing}
-        disabled={isProcessing}
-        className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-[#065A82] to-[#1C7293] hover:from-[#0873A6] hover:to-[#228BAF] text-white font-heading font-extrabold text-sm border border-cyan-400/50 shadow-[0_0_20px_rgba(34,211,238,0.25)] flex items-center justify-center gap-2 transition-all cursor-pointer"
+        disabled={isProcessing || !selectedFile}
+        className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-[#065A82] to-[#1C7293] hover:from-[#0873A6] hover:to-[#228BAF] text-white font-heading font-extrabold text-sm border border-cyan-400/50 shadow-[0_0_20px_rgba(34,211,238,0.25)] flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        <span>{isProcessing ? 'INGESTING & PROCESSING…' : 'LAUNCH PIPELINE & REAL-TIME MAP STREAM'}</span>
+        <span>{isProcessing ? 'INGESTING & PROCESSING…' : 'LAUNCH PIPELINE & DETECT'}</span>
         {isProcessing ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
       </button>
     </div>

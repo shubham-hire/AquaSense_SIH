@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { Detection, PriorityLevel, ReviewDecision, SurveyMission, SurveyNavigation } from '../types';
-import { MOCK_SURVEYS } from '../data/mockSurveys';
-import { MOCK_DETECTIONS } from '../data/mockDetections';
 import { SonarColormap } from '../utils/colormaps';
+
+/** Default survey ID used when no file has been uploaded yet. */
+export const DEFAULT_SURVEY_ID = 'SURVEY-NEW';
 
 interface SurveyState {
   mode: 'operator' | 'executive';
@@ -11,6 +12,7 @@ interface SurveyState {
   activeSurveyId: string;
   detections: Detection[];
   selectedDetectionId: string | null;
+  ensureSurvey: (survey: SurveyMission) => void;
   setActiveSurveyId: (id: string) => void;
   setSelectedDetectionId: (id: string | null) => void;
   waterfallPalette: SonarColormap;
@@ -34,6 +36,9 @@ interface SurveyState {
   setDetectionReview: (detectionId: string, review: ReviewDecision | null) => void;
   navigationBySurvey: Record<string, SurveyNavigation | undefined>;
   setSurveyNavigation: (surveyId: string, navigation: SurveyNavigation) => void;
+  /** Local blob URL of the uploaded image/file for preview with bounding boxes. */
+  uploadedImageUrl: string | null;
+  setUploadedImageUrl: (url: string | null) => void;
 }
 
 function updateMissionMetrics(mission: SurveyMission, detections: Detection[]): SurveyMission {
@@ -60,11 +65,18 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   mode: 'operator',
   setMode: (mode) => set({ mode }),
 
-  surveys: MOCK_SURVEYS,
-  activeSurveyId: MOCK_SURVEYS[0].id,
-  detections: MOCK_DETECTIONS,
-  selectedDetectionId: MOCK_DETECTIONS[0].id,
+  surveys: [],
+  activeSurveyId: DEFAULT_SURVEY_ID,
+  detections: [],
+  selectedDetectionId: null,
 
+  ensureSurvey: (survey) =>
+    set((state) => ({
+      surveys: state.surveys.some((item) => item.id === survey.id)
+        ? state.surveys
+        : [...state.surveys, survey],
+      activeSurveyId: survey.id,
+    })),
   setActiveSurveyId: (id) => {
     const matched = get().detections.filter((d) => d.surveyId === id);
     set({ activeSurveyId: id, selectedDetectionId: matched[0]?.id ?? null });
@@ -130,4 +142,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     set((state) => ({
       navigationBySurvey: { ...state.navigationBySurvey, [surveyId]: navigation },
     })),
+
+  uploadedImageUrl: null,
+  setUploadedImageUrl: (uploadedImageUrl) => set({ uploadedImageUrl }),
 }));

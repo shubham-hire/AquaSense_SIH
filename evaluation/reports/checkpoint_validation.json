@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-09-14T20:29:13Z",
+  "model_path": "/Users/shubham/Desktop/SIH2027/AquaSense/Main/models_checkpoints/mock_yolo26n_7class.pt",
+  "file_exists": true,
+  "file_size_mb": 5.25,
+  "is_nano_envelope": true,
+  "param_count": 2624080,
+  "format": "pytorch_pt",
+  "taxonomy_status": "7_class_with_dedicated_ghost_gear",
+  "num_classes": 7,
+  "classes": {
+    "0": "human_artifact_wreck",
+    "1": "electrical_cable",
+    "2": "electronic_hazard",
+    "3": "plastic_debris",
+    "4": "metal_drum_scrap",
+    "5": "biological_geological_exclusion",
+    "6": "ghost_gear"
+  },
+  "has_ghost_gear_class": true,
+  "test_tile_passed": true,
+  "latency_ms": 992.8,
+  "detections_count": 0,
+  "checks_passed": true,
+  "errors": [],
+  "warnings": []
+}

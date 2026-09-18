@@ -1,0 +1,10 @@
+# Install in a dedicated virtual environment for YOLO26 training.
+# Do not pin Ultralytics below the release that provides yolo26n.pt.
+torch
+torchvision
+ultralytics
+opencv-python
+Pillow
+PyYAML
+onnx
+onnxslim

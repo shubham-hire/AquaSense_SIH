@@ -21,6 +21,7 @@ os.environ.setdefault(
 from .detector import get_adapter
 from .geolocation import geolocate_detection
 from .schemas import QcReport
+from .taxonomy import CLASS_NAMES
 from .vendor_formats import extract_jsf, extract_sl2
 from .xtf import extract_xtf
 
@@ -28,10 +29,8 @@ SUPPORTED_FORMATS = {
     ".xtf": "XTF", ".jsf": "JSF", ".sl2": "SL2", ".tif": "GEOTIFF",
     ".tiff": "GEOTIFF", ".png": "IMAGE", ".jpg": "IMAGE", ".jpeg": "IMAGE",
 }
-BEST_PT_CLASS_NAMES = {
-    0: "shipwreck", 1: "submarine_pipeline", 2: "cylinder", 3: "ghost_net",
-    4: "ghost_pot_trap", 5: "plastic_debris", 6: "metal_debris",
-}
+# Backwards-compatible name for callers; the mapping itself lives in taxonomy.py.
+BEST_PT_CLASS_NAMES = CLASS_NAMES
 UNCALIBRATED_RESOLUTION_M_PER_PX = 0.1
 
 # The heuristic fallback generates randomised boxes that are NOT model output.
@@ -181,6 +180,31 @@ def _threat_level(classification: str, confidence: int) -> str:
     return "LOW"
 
 
+def _source_mask(mask: dict | None, left: int, top: int, image_width: int, image_height: int) -> dict | None:
+    """Translate a tile-local segmentation polygon into source-image pixels."""
+    if not mask or mask.get("type") != "polygon":
+        return mask
+    points = mask.get("data")
+    if not isinstance(points, list):
+        return None
+
+    source_points = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            continue
+        try:
+            x, y = float(point[0]), float(point[1])
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(x) or not math.isfinite(y):
+            continue
+        source_points.append([
+            round(min(max(left + x, 0), image_width), 3),
+            round(min(max(top + y, 0), image_height), 3),
+        ])
+    return {"type": "polygon", "data": source_points} if source_points else None
+
+
 def _iter_yolo_pipeline(survey_id: str, source: Path, qc: dict, dsp_applied: bool, extraction: dict | None, adapter, source_digest: str) -> Iterator[dict]:
     image = _load_model_image(source, extraction)
     image_height, image_width = image.shape[:2]
@@ -200,8 +224,15 @@ def _iter_yolo_pipeline(survey_id: str, source: Path, qc: dict, dsp_applied: boo
         batch_results = adapter.run_batch(tiles, resolution_m_per_px=resolution)
         for tile_result, (left, top, _crop_width, _crop_height) in zip(batch_results, tile_metadata):
             for raw in tile_result:
-                center_x = left + (raw.x_norm + raw.box_xywh_norm[2] / 2) * tile_size
-                center_y = top + (raw.y_norm + raw.box_xywh_norm[3] / 2) * tile_size
+                # The model's boxes are normalized to each tile. Convert the
+                # top-left and bottom-right corners to the original image once,
+                # then expose a normalized display box alongside physical size.
+                box_left = min(max(left + raw.x_norm * tile_size, 0), image_width)
+                box_top = min(max(top + raw.y_norm * tile_size, 0), image_height)
+                box_right = min(max(left + (raw.x_norm + raw.box_xywh_norm[2]) * tile_size, 0), image_width)
+                box_bottom = min(max(top + (raw.y_norm + raw.box_xywh_norm[3]) * tile_size, 0), image_height)
+                center_x = (box_left + box_right) / 2
+                center_y = (box_top + box_bottom) / 2
                 navigation = _navigation_for_row(extraction, center_y, image_height)
                 position, location_provenance = geolocate_detection(
                     navigation=navigation, center_x_px=center_x,
@@ -219,8 +250,14 @@ def _iter_yolo_pipeline(survey_id: str, source: Path, qc: dict, dsp_applied: boo
                         "y": round(min(max(center_y / max(image_height, 1), 0), 1), 6),
                         "width_m": round(raw.width_m, 3),
                         "height_m": round(raw.height_m, 3),
+                        "image_box": {
+                            "left": round(box_left / max(image_width, 1), 6),
+                            "top": round(box_top / max(image_height, 1), 6),
+                            "width": round(max(box_right - box_left, 0) / max(image_width, 1), 6),
+                            "height": round(max(box_bottom - box_top, 0) / max(image_height, 1), 6),
+                        },
                     },
-                    "segmentation_mask": raw.seg_mask, "position": position,
+                    "segmentation_mask": _source_mask(raw.seg_mask, left, top, image_width, image_height), "position": position,
                     "calibrated": False,
                     "low_data_quality": bool(qc.get("motion_artifact_rows")),
                     "motion_uncorrected": not bool(navigation and navigation.get("pitch_deg") is not None and navigation.get("roll_deg") is not None),

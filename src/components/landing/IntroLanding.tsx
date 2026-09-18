@@ -37,12 +37,11 @@ export const IntroLanding: React.FC = () => {
 
   const enterConsole = () => {
     if (isDiving || isExploring) return;
-    // Stop non-essential animations immediately to free up compositor
     if (mouseMoveRef.current) window.removeEventListener('mousemove', mouseMoveRef.current);
     if (statTimerRef.current) clearInterval(statTimerRef.current);
     setIsDiving(true);
-    // Navigate after the wipe bar finishes (650ms)
-    window.setTimeout(() => navigate(`/surveys/${activeSurveyId}/console`), 680);
+    // Navigate to upload page first — user can proceed to console after uploading a file
+    window.setTimeout(() => navigate('/ingest'), 680);
   };
 
   const exploreMissions = () => {

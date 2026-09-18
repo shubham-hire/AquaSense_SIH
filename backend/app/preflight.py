@@ -7,16 +7,10 @@ import os
 from pathlib import Path
 
 from .detector import get_adapter
+from .taxonomy import CLASS_NAMES
 
-EXPECTED_CLASSES = {
-    0: "shipwreck",
-    1: "submarine_pipeline",
-    2: "cylinder",
-    3: "ghost_net",
-    4: "ghost_pot_trap",
-    5: "plastic_debris",
-    6: "metal_debris",
-}
+# Checkpoint metadata must exactly match the canonical class-ID order.
+EXPECTED_CLASSES = CLASS_NAMES
 DEFAULT_MODEL_SHA256 = "342954fdd4ef6a24b89797f68dbeda8ffd9180b1cc7f7f291324c5cee5898f53"
 
 
