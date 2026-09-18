@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import os
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -28,6 +29,32 @@ for directory in (DATA_DIR, UPLOAD_DIR, ARTIFACT_DIR, MODELS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 repository = Repository(DATA_DIR / "aquasense.sqlite3")
 app = FastAPI(title="AquaSense API", version="0.1.0", description="Offline-first sonar survey processing API")
+
+# Survey identifiers are used to build upload filenames, artifact directories,
+# export filenames, and storage keys. Only an explicit allowlist is accepted so
+# untrusted input can never contribute path separators or traversal segments.
+SURVEY_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+SURVEY_ID_RULE = (
+    "survey_id must start with a letter or digit and may contain up to 128 "
+    "letters, digits, dots, underscores, or hyphens"
+)
+
+
+def validate_survey_id(survey_id: str) -> str:
+    """Reject any survey identifier that could escape the storage directories."""
+    if not SURVEY_ID_PATTERN.fullmatch(survey_id) or ".." in survey_id:
+        raise HTTPException(422, SURVEY_ID_RULE)
+    return survey_id
+
+
+def _contained_path(directory: Path, name: str) -> Path:
+    """Resolve `name` inside `directory`, refusing anything that escapes it."""
+    base = directory.resolve()
+    candidate = (base / name).resolve()
+    if candidate != base and base not in candidate.parents:
+        raise HTTPException(422, SURVEY_ID_RULE)
+    return candidate
+
 
 DEFAULT_ORIGINS = [
     "http://localhost:3000", "http://127.0.0.1:3000",
@@ -59,6 +86,7 @@ def get_detection(detection_id: str) -> dict:
 
 
 def survey_detections(survey_id: str) -> list[dict]:
+    validate_survey_id(survey_id)
     if not repository.ingest_info(survey_id):
         raise HTTPException(404, "Survey has not been ingested")
     return repository.detections_for_survey(survey_id)
@@ -84,11 +112,12 @@ def health() -> dict:
 
 @app.post("/v1/surveys/{survey_id}/ingest")
 async def ingest_survey(survey_id: str, file: UploadFile = File(...)) -> dict:
+    validate_survey_id(survey_id)
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in SUPPORTED_FORMATS:
         raise HTTPException(415, f"Supported formats: {', '.join(SUPPORTED_FORMATS)}")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    destination = UPLOAD_DIR / f"{survey_id}-{uuid4()}{suffix}"
+    destination = _contained_path(UPLOAD_DIR, f"{survey_id}-{uuid4()}{suffix}")
     size = 0
     with destination.open("wb") as output:
         while chunk := await file.read(1024 * 1024):
@@ -97,8 +126,9 @@ async def ingest_survey(survey_id: str, file: UploadFile = File(...)) -> dict:
                 destination.unlink(missing_ok=True)
                 raise HTTPException(413, "Upload exceeds the 500 MB offline processing limit")
             output.write(chunk)
+    artifact_dir = _contained_path(ARTIFACT_DIR, f"{survey_id}-{uuid4()}")
     try:
-        qc, extraction = inspect_file(survey_id, destination, file.filename or destination.name, ARTIFACT_DIR / f"{survey_id}-{uuid4()}")
+        qc, extraction = inspect_file(survey_id, destination, file.filename or destination.name, artifact_dir)
     except ValueError as exc:
         destination.unlink(missing_ok=True)
         raise HTTPException(422, str(exc)) from exc
@@ -139,6 +169,7 @@ async def _process_in_background(survey_id: str, source_path: str, qc: dict, ext
 
 @app.post("/v1/surveys/{survey_id}/process", status_code=202)
 async def process_survey(survey_id: str, dsp_applied: bool = False) -> dict:
+    validate_survey_id(survey_id)
     info = repository.ingest_info(survey_id)
     if not info:
         raise HTTPException(409, "Ingest a survey before processing it")
@@ -149,6 +180,7 @@ async def process_survey(survey_id: str, dsp_applied: bool = False) -> dict:
 
 @app.get("/v1/surveys/{survey_id}/processing")
 def processing_status(survey_id: str) -> dict:
+    validate_survey_id(survey_id)
     return event_hub._state.get(survey_id, {"event": "stream.ready", "survey_id": survey_id})
 
 
@@ -159,6 +191,7 @@ def list_detections(survey_id: str) -> list[dict]:
 
 @app.get("/v1/surveys/{survey_id}/sonar")
 def sonar_metadata(survey_id: str) -> dict:
+    validate_survey_id(survey_id)
     info = repository.ingest_info(survey_id)
     if not info or not info[2]:
         raise HTTPException(404, "No extracted sonar payload is available for this survey")
@@ -167,6 +200,7 @@ def sonar_metadata(survey_id: str) -> dict:
 
 @app.get("/v1/surveys/{survey_id}/navigation")
 def survey_navigation(survey_id: str) -> dict:
+    validate_survey_id(survey_id)
     info = repository.ingest_info(survey_id)
     if not info or not info[2]:
         raise HTTPException(404, "No extracted navigation is available for this survey")
@@ -195,6 +229,7 @@ def survey_navigation(survey_id: str) -> dict:
 
 @app.get("/v1/surveys/{survey_id}/waterfall.png")
 def waterfall_image(survey_id: str) -> Response:
+    validate_survey_id(survey_id)
     info = repository.ingest_info(survey_id)
     if not info or not info[2] or not Path(info[2]["waterfall_path"]).is_file():
         raise HTTPException(404, "No extracted XTF waterfall image is available for this survey")
@@ -330,6 +365,9 @@ def pdf_report(survey_id: str) -> Response:
 
 @app.websocket("/v1/surveys/{survey_id}/stream")
 async def stream_detections(websocket: WebSocket, survey_id: str) -> None:
+    if not SURVEY_ID_PATTERN.fullmatch(survey_id) or ".." in survey_id:
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     queue = event_hub.subscribe(survey_id)
     try:
