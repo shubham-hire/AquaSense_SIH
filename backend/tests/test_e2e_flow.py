@@ -11,8 +11,12 @@ import app.main as main_module
 
 
 @pytest.fixture()
-def isolated_client(tmp_path: Path):
+def isolated_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """TestClient with fresh storage and one persistent ASGI event loop."""
+    # The suite intentionally runs without model weights. Processing now
+    # refuses to fabricate detections unless synthetic output is requested,
+    # so these flow tests opt in explicitly.
+    monkeypatch.setenv("AQUASENSE_ALLOW_SYNTHETIC_FALLBACK", "1")
     main_module.DATA_DIR = tmp_path
     main_module.UPLOAD_DIR = tmp_path / "uploads"
     main_module.ARTIFACT_DIR = tmp_path / "artifacts"
@@ -86,6 +90,8 @@ def test_full_pipeline_e2e(isolated_client: TestClient, tmp_path: Path):
     detection_id = first_detection["id"]
     assert first_detection["survey_id"] == survey_id
     assert first_detection["position"]["position_source"] == "UNAVAILABLE"
+    # No model weights are installed here, so results must be marked synthetic.
+    assert first_detection["provenance"]["synthetic"] is True
 
     review_payload = {
         "outcome": "CONFIRMED",
