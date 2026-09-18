@@ -39,6 +39,7 @@ REQUIRED_MODULES = {
     "PIL": "Pillow",
     "reportlab": "reportlab",
     "pyxtf": "pyxtf",
+    "yaml": "PyYAML",
     "multipart": "python-multipart",
     "ultralytics": "ultralytics",
 }

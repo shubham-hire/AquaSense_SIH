@@ -14,6 +14,8 @@ def test_pipeline_defaults_to_committed_checkpoint() -> None:
 
     environment = os.environ.copy()
     environment.pop("AQUASENSE_MODEL_PATH", None)
+    # pytest.ini's `pythonpath = backend` applies to this process only.
+    environment["PYTHONPATH"] = str(repository_root / "backend")
     completed = subprocess.run(
         [
             sys.executable,

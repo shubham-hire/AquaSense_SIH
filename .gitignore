@@ -44,6 +44,9 @@ models_checkpoints/
 *.tar.gz
 temp_training_bundle/
 data/downloaded/
+data/uploads/
+data/artifacts/
+data/*.sqlite3
 data/unified_training_dataset/
 
 # ==============================================================================
