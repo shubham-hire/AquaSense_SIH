@@ -34,6 +34,29 @@ BEST_PT_CLASS_NAMES = {
 }
 UNCALIBRATED_RESOLUTION_M_PER_PX = 0.1
 
+# The heuristic fallback generates randomised boxes that are NOT model output.
+# It must never run implicitly: an operator looking at the console cannot tell
+# fabricated contacts from real ones, so processing fails loudly instead.
+# Set AQUASENSE_ALLOW_SYNTHETIC_FALLBACK=1 only for offline UI demos.
+SYNTHETIC_FALLBACK_ENV = "AQUASENSE_ALLOW_SYNTHETIC_FALLBACK"
+SYNTHETIC_WARNING = (
+    "SYNTHETIC DEMO DATA - these coordinates, sizes, and confidences were "
+    "randomly generated because the detection model was unavailable. They are "
+    "not sonar findings and must not be used operationally."
+)
+MODEL_UNAVAILABLE_MESSAGE = (
+    "Detection model unavailable, so processing was refused rather than "
+    "returning fabricated detections. Provide valid weights at "
+    "AQUASENSE_MODEL_PATH and install ultralytics, or set "
+    f"{SYNTHETIC_FALLBACK_ENV}=1 to explicitly opt in to clearly labelled "
+    "synthetic demo output."
+)
+
+
+def synthetic_fallback_enabled() -> bool:
+    """True only when an operator explicitly opted in to fabricated output."""
+    return os.getenv(SYNTHETIC_FALLBACK_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
 
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -208,6 +231,7 @@ def _iter_yolo_pipeline(survey_id: str, source: Path, qc: dict, dsp_applied: boo
                     "provenance": {
                         "source_sha256": source_digest, "model_sha256": model_digest,
                         "pipeline_version": "0.4.0", "detector_backend": "ultralytics-yolo26",
+                        "synthetic": False,
                         "resolution_meters_per_pixel": resolution,
                         "measurement_status": measurement_status,
                         "measurement_source": measurement_source,
@@ -240,16 +264,16 @@ def _iter_heuristic_fallback(survey_id: str, source: Path, qc: dict, dsp_applied
     valid_fix = bool(nav and nav.get("valid_fix"))
     position = ({"latitude": nav["latitude"], "longitude": nav["longitude"], "position_source": "GPS_FIX", "refusal_reason": None} if valid_fix else {"latitude": None, "longitude": None, "position_source": "UNAVAILABLE", "refusal_reason": "Valid navigation metadata was not available for this ping."})
     yield {
-        "id": str(uuid4()), "survey_id": survey_id, "classification": "marine_debris",
+        "id": str(uuid4()), "survey_id": survey_id, "classification": "synthetic_placeholder",
         "confidence_percent": int(round(raw_score * 100)),
         "bounding_box": {"x": round(float(rng.uniform(0.1, 0.8)), 3), "y": round(float(rng.uniform(0.1, 0.8)), 3), "width_m": round(float(rng.uniform(0.4, 2.0)), 2), "height_m": round(float(rng.uniform(0.3, 1.4)), 2)},
         "segmentation_mask": None, "position": position, "calibrated": False,
         "low_data_quality": bool(qc.get("motion_artifact_rows")), "motion_uncorrected": True,
-        "model_version": "heuristic-baseline-v1 (model unavailable)", "dsp_applied": dsp_applied,
+        "model_version": "SYNTHETIC-DEMO-DATA heuristic-baseline-v1 (model unavailable)", "dsp_applied": dsp_applied,
         "ping_timestamp": datetime.now(timezone.utc).isoformat(), "ping_index": 0,
         "threat_level": "MEDIUM", "verification_features": features,
         "feature_weights": {"target_contrast": 0.24, "shadow_ratio": 0.17, "local_snr": 0.21, "background_roughness": -0.12},
-        "provenance": {"source_sha256": digest, "pipeline_version": "0.4.0", "detector_backend": "heuristic-fallback", "resolution_meters_per_pixel": qc["resolution_meters_per_pixel"], "measurement_status": "SIMULATED", "calibration_status": "not_fitted"},
+        "provenance": {"source_sha256": digest, "pipeline_version": "0.4.0", "detector_backend": "heuristic-fallback", "synthetic": True, "synthetic_warning": SYNTHETIC_WARNING, "resolution_meters_per_pixel": qc["resolution_meters_per_pixel"], "measurement_status": "SIMULATED", "calibration_status": "not_fitted"},
     }
 
 
@@ -259,6 +283,8 @@ def iter_pipeline(survey_id: str, source: Path, qc: dict, dsp_applied: bool, ext
     if adapter.is_ready:
         yield from _iter_yolo_pipeline(survey_id, source, qc, dsp_applied, extraction, adapter, source_digest)
         return
+    if not synthetic_fallback_enabled():
+        raise RuntimeError(MODEL_UNAVAILABLE_MESSAGE)
     yield from _iter_heuristic_fallback(survey_id, source, qc, dsp_applied, extraction, source_digest)
 
 
