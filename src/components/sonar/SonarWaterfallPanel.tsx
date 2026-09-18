@@ -47,7 +47,10 @@ export const SonarWaterfallPanel: React.FC<SonarWaterfallPanelProps> = ({ classN
 
       {/* Waterfall Display with Calipers Overlay */}
       <div className="relative flex-1 min-h-[340px] rounded-lg overflow-hidden bg-black/90">
-        <WaterfallCanvas sourceUrl={waterfallImageUrl(activeSurveyId)} onStatusChange={onWaterfallStatus} />
+        <WaterfallCanvas
+          sourceUrl={activeSurveyId && activeSurveyId !== 'SURVEY-NEW' ? waterfallImageUrl(activeSurveyId) : ''}
+          onStatusChange={onWaterfallStatus}
+        />
         {waterfallStatus === 'ready' && <MeasurementCalipers />}
       </div>
 
