@@ -94,3 +94,5 @@ Thumbs.db
 .idea/
 .vscode/
 *.sw?
+.freebuff
+__agent__
