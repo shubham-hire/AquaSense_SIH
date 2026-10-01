@@ -239,7 +239,7 @@ See [`model-smoke-test.yml`](.github/workflows/model-smoke-test.yml) for the ful
 
 ## License
 
-No licence file is currently included. The YOLO checkpoint is recorded as **AGPL-3.0** (see `MODEL_INTEGRATION.md`); licensing for application code is expected to be coordinated with MoES / NIOT as part of the SIH 2026 submission.
+Licensed under **AGPL-3.0** — see [`LICENSE`](LICENSE). This covers application code, the bundled `best.pt` checkpoint (recorded as AGPL-3.0 in `MODEL_INTEGRATION.md`), and use with the `ultralytics` runtime. SIH 2026 submission use coordinated with MoES / NIOT.
 
 ---
 
