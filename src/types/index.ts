@@ -1,4 +1,4 @@
-// Domain Types for AquaSense (PRD v1.1 and Frontend Architecture Compliant)
+// Domain Types for OceanAid (PRD v1.1 and Frontend Architecture Compliant)
 
 export type PriorityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 

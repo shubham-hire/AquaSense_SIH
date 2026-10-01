@@ -4,31 +4,37 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import os
 import re
+import secrets
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
+from .detector import get_adapter
 from .pipeline import SUPPORTED_FORMATS, inspect_file, iter_pipeline
 from .repository import Repository
 from .schemas import Detection, ReviewDecision
 from .streaming import event_hub
 
+logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = Path(os.getenv("AQUASENSE_DATA_DIR", ROOT / "data"))
+DATA_DIR = Path(os.getenv("OCEANAID_DATA_DIR") or os.getenv("AQUASENSE_DATA_DIR", ROOT / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 ARTIFACT_DIR = DATA_DIR / "artifacts"
-MODELS_DIR = Path(os.getenv("AQUASENSE_MODELS_DIR", DATA_DIR / "models"))
+MODELS_DIR = Path(os.getenv("OCEANAID_MODELS_DIR") or os.getenv("AQUASENSE_MODELS_DIR", DATA_DIR / "models"))
 for directory in (DATA_DIR, UPLOAD_DIR, ARTIFACT_DIR, MODELS_DIR):
     directory.mkdir(parents=True, exist_ok=True)
-repository = Repository(DATA_DIR / "aquasense.sqlite3")
-app = FastAPI(title="AquaSense API", version="0.1.0", description="Offline-first sonar survey processing API")
+db_file = DATA_DIR / "oceanaid.sqlite3" if (DATA_DIR / "oceanaid.sqlite3").exists() else (DATA_DIR / "aquasense.sqlite3" if (DATA_DIR / "aquasense.sqlite3").exists() else DATA_DIR / "oceanaid.sqlite3")
+repository = Repository(db_file)
+app = FastAPI(title="OceanAid API", version="0.1.0", description="Offline-first sonar survey processing API")
+processing_tasks: dict[str, asyncio.Task[None]] = {}
 
 # Survey identifiers are used to build upload filenames, artifact directories,
 # export filenames, and storage keys. Only an explicit allowlist is accepted so
@@ -61,7 +67,7 @@ DEFAULT_ORIGINS = [
     "http://localhost:5173", "http://127.0.0.1:5173",
     "https://aqua-sense-sih.vercel.app",
 ]
-env_origins = [origin.strip() for origin in os.getenv("AQUASENSE_CORS_ORIGINS", "").split(",") if origin.strip()]
+env_origins = [origin.strip() for origin in (os.getenv("OCEANAID_CORS_ORIGINS") or os.getenv("AQUASENSE_CORS_ORIGINS", "")).split(",") if origin.strip()]
 cors_origins = list(dict.fromkeys(DEFAULT_ORIGINS + env_origins))
 app.add_middleware(
     CORSMiddleware,
@@ -73,9 +79,29 @@ app.add_middleware(
 )
 
 
+def configured_api_key() -> str | None:
+    """Return the optional shared deployment key; local use stays open by default."""
+    value = os.getenv("OCEANAID_API_KEY") or os.getenv("AQUASENSE_API_KEY")
+    return value.strip() if value and value.strip() else None
+
+
+def valid_api_key(provided: str | None) -> bool:
+    expected = configured_api_key()
+    return expected is None or bool(provided) and secrets.compare_digest(provided, expected)
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    """Protect operational HTTP endpoints when a deployment key is configured."""
+    presented_key = request.headers.get("x-api-key") or request.query_params.get("api_key")
+    if request.method != "OPTIONS" and request.url.path.startswith("/v1/") and not valid_api_key(presented_key):
+        return JSONResponse({"detail": "A valid X-API-Key header is required"}, status_code=401)
+    return await call_next(request)
+
+
 @app.get("/")
 def root() -> dict:
-    return {"name": "AquaSense API", "status": "online", "version": "0.1.0", "docs_url": "/docs", "health_url": "/health", "cors_origins": cors_origins}
+    return {"name": "OceanAid API", "status": "online", "version": "0.1.0", "docs_url": "/docs", "health_url": "/health", "cors_origins": cors_origins}
 
 
 def get_detection(detection_id: str) -> dict:
@@ -92,8 +118,8 @@ def survey_detections(survey_id: str) -> list[dict]:
     return repository.detections_for_survey(survey_id)
 
 
-@app.get("/health")
-def health() -> dict:
+@app.get("/health", response_model=None)
+def health() -> dict | JSONResponse:
     import shutil
     try:
         stat = shutil.disk_usage(DATA_DIR)
@@ -101,13 +127,15 @@ def health() -> dict:
         disk_free_gb = round(stat.free / (1024 ** 3), 2)
     except Exception:
         disk_total_gb = disk_free_gb = None
-    model_path = Path(os.getenv("AQUASENSE_MODEL_PATH", MODELS_DIR / "yolo26n_aquasense_marine.pt"))
-    return {
-        "status": "ok", "service": "aquasense-api", "version": "0.1.0",
+    adapter = get_adapter()
+    model = adapter.describe()
+    payload = {
+        "status": "ok" if adapter.is_ready else "degraded", "service": "oceanaid-api", "version": "0.1.0",
         "storage": {"type": "sqlite", "data_dir": str(DATA_DIR), "disk_total_gb": disk_total_gb, "disk_free_gb": disk_free_gb},
         "cors_origins": cors_origins,
-        "model": {"configured_path": str(model_path), "weights_present": model_path.exists()},
+        "model": {**model, "weights_present": Path(adapter.config.model_path).is_file()},
     }
+    return payload if adapter.is_ready else JSONResponse(payload, status_code=503)
 
 
 @app.post("/v1/surveys/{survey_id}/ingest")
@@ -157,10 +185,19 @@ def list_surveys() -> list[dict]:
     return repository.surveys()
 
 
+async def _publish_processing_event(survey_id: str, event: str, **payload) -> None:
+    message = {"event": event, "survey_id": survey_id, **payload}
+    try:
+        repository.save_processing_status(survey_id, message)
+    except Exception:
+        logger.exception("Could not persist processing status for survey %s", survey_id)
+    await event_hub.publish(survey_id, event, **payload)
+
+
 async def _process_in_background(survey_id: str, source_path: str, qc: dict, extraction: dict | None, dsp_applied: bool) -> None:
     try:
-        await event_hub.publish(survey_id, "processing.started")
-        await event_hub.publish(survey_id, "processing.stage", stage="detection", progress_percent=25)
+        await _publish_processing_event(survey_id, "processing.started")
+        await _publish_processing_event(survey_id, "processing.stage", stage="detection", progress_percent=25)
         detections = await asyncio.to_thread(
             _collect_pipeline_results,
             survey_id,
@@ -169,14 +206,15 @@ async def _process_in_background(survey_id: str, source_path: str, qc: dict, ext
             dsp_applied,
             extraction,
         )
+        repository.replace_detections(survey_id, detections)
+        if detections:
+            await _publish_processing_event(survey_id, "processing.stage", stage="verification", progress_percent=75)
         for number, detection in enumerate(detections, start=1):
-            await event_hub.publish(survey_id, "processing.stage", stage="verification", progress_percent=75)
             await event_hub.publish(survey_id, "detection.verified", data=detection, sequence=number)
             await asyncio.sleep(0)
-        repository.replace_detections(survey_id, detections)
-        await event_hub.publish(survey_id, "processing.complete", detection_count=len(detections), progress_percent=100)
+        await _publish_processing_event(survey_id, "processing.complete", detection_count=len(detections), progress_percent=100)
     except Exception as exc:
-        await event_hub.publish(survey_id, "processing.failed", detail=str(exc))
+        await _publish_processing_event(survey_id, "processing.failed", detail=str(exc))
 
 
 @app.post("/v1/surveys/{survey_id}/process", status_code=202)
@@ -185,15 +223,43 @@ async def process_survey(survey_id: str, dsp_applied: bool = False) -> dict:
     info = repository.ingest_info(survey_id)
     if not info:
         raise HTTPException(409, "Ingest a survey before processing it")
+    existing = processing_tasks.get(survey_id)
+    if existing is not None and not existing.done():
+        raise HTTPException(409, "This survey is already being processed")
     source_path, qc, extraction = info
-    asyncio.create_task(_process_in_background(survey_id, source_path, qc, extraction, dsp_applied))
+    task = asyncio.create_task(_process_in_background(survey_id, source_path, qc, extraction, dsp_applied))
+    processing_tasks[survey_id] = task
+
+    def forget_completed(completed: asyncio.Task[None]) -> None:
+        if processing_tasks.get(survey_id) is completed:
+            processing_tasks.pop(survey_id, None)
+
+    task.add_done_callback(forget_completed)
     return {"survey_id": survey_id, "status": "processing_started", "stream_url": f"/v1/surveys/{survey_id}/stream"}
+
+
+def _current_processing_status(survey_id: str) -> dict:
+    state = (
+        event_hub._state.get(survey_id)
+        or repository.get_processing_status(survey_id)
+        or {"event": "stream.ready", "survey_id": survey_id}
+    )
+    task = processing_tasks.get(survey_id)
+    if state.get("event") in {"processing.started", "processing.stage"} and (task is None or task.done()):
+        state = {
+            "event": "processing.failed",
+            "survey_id": survey_id,
+            "detail": "Processing was interrupted before completion; start the survey again.",
+        }
+        repository.save_processing_status(survey_id, state)
+        event_hub._state[survey_id] = state
+    return state
 
 
 @app.get("/v1/surveys/{survey_id}/processing")
 def processing_status(survey_id: str) -> dict:
     validate_survey_id(survey_id)
-    return event_hub._state.get(survey_id, {"event": "stream.ready", "survey_id": survey_id})
+    return _current_processing_status(survey_id)
 
 
 @app.get("/v1/surveys/{survey_id}/detections", response_model=list[Detection])
@@ -248,6 +314,14 @@ def waterfall_image(survey_id: str) -> Response:
     return Response(Path(info[2]["waterfall_path"]).read_bytes(), media_type="image/png")
 
 
+@app.get("/v1/surveys/{survey_id}/review-history")
+def survey_review_history(survey_id: str) -> list[dict]:
+    validate_survey_id(survey_id)
+    if not repository.ingest_info(survey_id):
+        raise HTTPException(404, "Survey has not been ingested")
+    return repository.review_history_for_survey(survey_id)
+
+
 @app.get("/v1/detections/{detection_id}", response_model=Detection)
 def detection_detail(detection_id: str) -> dict:
     item = get_detection(detection_id)
@@ -291,6 +365,7 @@ def json_report(survey_id: str) -> Response:
     items = survey_detections(survey_id)
     reviews = repository.reviews_for_survey(survey_id)
     enriched = [{**d, "review": reviews.get(d["id"])} for d in items]
+    review_history = repository.review_history_for_survey(survey_id)
     payload = {
         "report_metadata": {
             "survey_id": survey_id, "total_detections": len(enriched),
@@ -299,8 +374,10 @@ def json_report(survey_id: str) -> Response:
             "confirmed_count": sum((d["review"] or {}).get("outcome") == "CONFIRMED" for d in enriched),
             "rejected_fp_count": sum((d["review"] or {}).get("outcome") == "REJECTED_FP" for d in enriched),
             "corrected_count": sum((d["review"] or {}).get("outcome") == "CORRECTED" for d in enriched),
+            "archived_review_count": len(review_history),
         },
         "detections": enriched,
+        "review_history": review_history,
     }
     return Response(json.dumps(payload, indent=2), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="{survey_id}-report.json"'})
 
@@ -353,7 +430,7 @@ def geojson_report(survey_id: str) -> dict:
         }
         for d in items if d["position"]["position_source"] == "GPS_FIX"
     ]
-    return {"type": "FeatureCollection", "name": f"AquaSense_{survey_id}_hazards", "features": features}
+    return {"type": "FeatureCollection", "name": f"OceanAid_{survey_id}_hazards", "features": features}
 
 
 @app.get("/v1/surveys/{survey_id}/report.pdf")
@@ -361,8 +438,8 @@ def pdf_report(survey_id: str) -> Response:
     items = survey_detections(survey_id)
     pdf = io.BytesIO()
     page = canvas.Canvas(pdf, pagesize=letter)
-    page.setTitle(f"AquaSense mission report — {survey_id}")
-    page.drawString(72, 750, f"AquaSense mission report: {survey_id}")
+    page.setTitle(f"OceanAid mission report — {survey_id}")
+    page.drawString(72, 750, f"OceanAid mission report: {survey_id}")
     page.drawString(72, 730, f"Detections: {len(items)} | Unlocated: {sum(d['position']['position_source'] == 'UNAVAILABLE' for d in items)}")
     y = 700
     for d in items:
@@ -380,13 +457,21 @@ async def stream_detections(websocket: WebSocket, survey_id: str) -> None:
     if not SURVEY_ID_PATTERN.fullmatch(survey_id) or ".." in survey_id:
         await websocket.close(code=1008)
         return
+    if not valid_api_key(websocket.query_params.get("api_key")):
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
-    queue = event_hub.subscribe(survey_id)
-    try:
-        state = event_hub._state.get(survey_id, {})
-        if state.get("event") == "processing.complete":
+    state = _current_processing_status(survey_id)
+    if state.get("event") in {"processing.complete", "processing.failed"}:
+        if state["event"] == "processing.complete":
             for detection in repository.detections_for_survey(survey_id):
                 await websocket.send_json({"event": "detection.verified", "survey_id": survey_id, "data": detection, "replay": True})
+        await websocket.send_json(state)
+        await websocket.close(code=1000)
+        return
+
+    queue = event_hub.subscribe(survey_id)
+    try:
         while True:
             await websocket.send_json(await queue.get())
     except WebSocketDisconnect:

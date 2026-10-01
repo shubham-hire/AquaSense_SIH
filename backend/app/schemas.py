@@ -90,7 +90,7 @@ class ReviewDecision(BaseModel):
     reviewed_by: str = Field(
         default="operator",
         max_length=128,
-        description="Operator identifier (free-text, no auth required yet).",
+        description="Operator display identifier; a shared API key does not verify individual identity.",
     )
     reviewed_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

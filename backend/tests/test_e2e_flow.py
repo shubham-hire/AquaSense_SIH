@@ -8,6 +8,15 @@ from fastapi.testclient import TestClient
 
 from app.repository import Repository
 import app.main as main_module
+import app.pipeline as pipeline_module
+
+
+class _UnavailableAdapter:
+    is_ready = False
+    config = type("Config", (), {"model_path": Path("/missing/model.pt")})()
+
+    def describe(self):
+        return {"status": "unavailable", "model_path": str(self.config.model_path)}
 
 
 @pytest.fixture()
@@ -17,6 +26,8 @@ def isolated_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # refuses to fabricate detections unless synthetic output is requested,
     # so these flow tests opt in explicitly.
     monkeypatch.setenv("AQUASENSE_ALLOW_SYNTHETIC_FALLBACK", "1")
+    monkeypatch.setattr(pipeline_module, "get_adapter", _UnavailableAdapter)
+    monkeypatch.setattr(main_module, "get_adapter", _UnavailableAdapter)
     main_module.DATA_DIR = tmp_path
     main_module.UPLOAD_DIR = tmp_path / "uploads"
     main_module.ARTIFACT_DIR = tmp_path / "artifacts"
@@ -43,11 +54,32 @@ def test_root_and_health_endpoints(isolated_client: TestClient):
     assert "https://aqua-sense-sih.vercel.app" in root_data["cors_origins"]
 
     response = isolated_client.get("/health")
-    assert response.status_code == 200
+    assert response.status_code == 503
     health_data = response.json()
-    assert health_data["status"] == "ok"
+    assert health_data["status"] == "degraded"
     assert health_data["storage"]["type"] == "sqlite"
     assert "model" in health_data
+
+
+def test_health_returns_ok_only_when_model_is_ready(
+    isolated_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    model = tmp_path / "ready.pt"
+    model.write_bytes(b"ready")
+
+    class ReadyAdapter:
+        is_ready = True
+        config = type("Config", (), {"model_path": model})()
+
+        def describe(self):
+            return {"status": "ready", "model_path": str(model)}
+
+    monkeypatch.setattr(main_module, "get_adapter", ReadyAdapter)
+    response = isolated_client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
 
 
 def test_full_pipeline_e2e(isolated_client: TestClient, tmp_path: Path):

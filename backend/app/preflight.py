@@ -1,4 +1,4 @@
-"""Production startup guard for the AquaSense inference model."""
+"""Production startup guard for the OceanAid inference model."""
 from __future__ import annotations
 
 import hashlib
@@ -27,24 +27,24 @@ def require_model() -> dict:
     adapter = get_adapter()
     if not adapter.is_ready:
         raise RuntimeError(
-            f"AquaSense model is required but unavailable: {adapter.describe()}"
+            f"OceanAid model is required but unavailable: {adapter.describe()}"
         )
 
     model_path = Path(adapter.config.model_path)
     if not model_path.is_file():
-        raise RuntimeError(f"AquaSense model file does not exist: {model_path}")
+        raise RuntimeError(f"OceanAid model file does not exist: {model_path}")
 
     expected_sha = os.getenv("AQUASENSE_MODEL_SHA256", DEFAULT_MODEL_SHA256)
     actual_sha = _sha256(model_path)
     if expected_sha and actual_sha != expected_sha:
         raise RuntimeError(
-            f"AquaSense model checksum mismatch: expected {expected_sha}, got {actual_sha}"
+            f"OceanAid model checksum mismatch: expected {expected_sha}, got {actual_sha}"
         )
 
     names = getattr(adapter._model, "names", None)
     if names != EXPECTED_CLASSES:
         raise RuntimeError(
-            f"AquaSense model class mapping mismatch: expected {EXPECTED_CLASSES}, got {names}"
+            f"OceanAid model class mapping mismatch: expected {EXPECTED_CLASSES}, got {names}"
         )
 
     return {

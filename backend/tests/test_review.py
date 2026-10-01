@@ -219,6 +219,25 @@ class TestReviewRepository:
         rv_map = repo.reviews_for_survey(SURVEY_ID)
         assert "det-other" not in rv_map
 
+    def test_detection_list_includes_persisted_review(self, repo: Repository):
+        repo.save_review(DET_ID, ReviewDecision(outcome="CONFIRMED").model_dump(mode="json"))
+        detections = repo.detections_for_survey(SURVEY_ID)
+        reviewed = next(item for item in detections if item["id"] == DET_ID)
+        assert reviewed["review"]["outcome"] == "CONFIRMED"
+
+    def test_reprocessing_archives_reviews_before_replacing_detections(self, repo: Repository):
+        repo.save_review(DET_ID, ReviewDecision(outcome="CONFIRMED", note="audit me").model_dump(mode="json"))
+        replacement = {**_MINIMAL_DETECTION, "id": "det-new"}
+
+        repo.replace_detections(SURVEY_ID, [replacement])
+
+        assert [item["id"] for item in repo.detections_for_survey(SURVEY_ID)] == ["det-new"]
+        history = repo.review_history_for_survey(SURVEY_ID)
+        assert len(history) == 1
+        assert history[0]["detection_id"] == DET_ID
+        assert history[0]["review"]["outcome"] == "CONFIRMED"
+        assert history[0]["detection"]["classification"] == "plastic_debris"
+
 
 # ---------------------------------------------------------------------------
 # 3. REST endpoints
@@ -267,6 +286,15 @@ class TestReviewEndpoints:
         assert body["outcome"] == "CONFIRMED"
         assert body["note"] == "verified by sonar"
         assert body["nav_trustworthy"] is True
+
+    def test_survey_detection_list_restores_review(self, client: TestClient):
+        client.put(
+            f"/v1/detections/{DET_ID}/review",
+            json={"outcome": "CONFIRMED", "nav_trustworthy": True},
+        )
+        detections = client.get(f"/v1/surveys/{SURVEY_ID}/detections").json()
+        reviewed = next(item for item in detections if item["id"] == DET_ID)
+        assert reviewed["review"]["outcome"] == "CONFIRMED"
 
     def test_get_review_not_yet_submitted_returns_404(self, client: TestClient):
         resp = client.get(f"/v1/detections/{DET_ID}/review")
@@ -332,6 +360,8 @@ class TestExportEnrichment:
         assert meta["reviewed_count"] == 1
         assert meta["rejected_fp_count"] == 1
         assert meta["confirmed_count"] == 0
+        assert meta["archived_review_count"] == 0
+        assert payload["review_history"] == []
 
     def test_csv_report_review_columns_empty_when_unreviewed(self, client: TestClient):
         resp = client.get(f"/v1/surveys/{SURVEY_ID}/report.csv")

@@ -1,4 +1,4 @@
-"""Canonical class order for the production AquaSense YOLO checkpoint.
+"""Canonical class order for the production OceanAid YOLO checkpoint.
 
 Class IDs are part of the model contract: changing their order requires a new
 checkpoint and a matching training dataset.  Import this module rather than

@@ -1,4 +1,4 @@
-# AquaSense `best.pt` integration
+# OceanAid `best.pt` integration
 
 The backend now uses the supplied Ultralytics YOLO26 detection checkpoint whenever it is available. The heuristic pipeline remains only as an explicitly labelled fallback when the checkpoint or inference runtime cannot be loaded.
 
@@ -18,18 +18,9 @@ The backend now uses the supplied Ultralytics YOLO26 detection checkpoint whenev
   6. `plastic_debris`
   7. `metal_debris`
 
-## Place the model
+## Model location
 
-The binary checkpoint is intentionally not included in this pull request. Put the supplied `best.pt` in one of these locations:
-
-### Local development
-
-```bash
-mkdir -p models_checkpoints
-cp /path/to/best.pt models_checkpoints/best.pt
-```
-
-Alternatively, set an absolute path:
+The verified binary checkpoint is committed at the repository root as `best.pt`. The local runner uses it automatically. To test another checkpoint without replacing the bundled file, set an absolute path:
 
 ```bash
 export AQUASENSE_MODEL_PATH=/absolute/path/to/best.pt
@@ -43,7 +34,7 @@ Store the checkpoint on the persistent volume at:
 /data/models/best.pt
 ```
 
-The Docker configuration uses that path by default. For Render, use `/var/data/models/best.pt` because the configured persistent disk is mounted at `/var/data`.
+The Docker configuration uses that path by default. Render and Fly.io both mount the configured persistent volume at `/data`; the root Docker image seeds `/data/models/best.pt` from the committed checkpoint before running preflight.
 
 ## Verify the file
 
@@ -61,11 +52,11 @@ Expected result:
 
 ```bash
 pip install -r backend/requirements.txt
-AQUASENSE_MODEL_PATH=/absolute/path/to/best.pt \
-  python3 -m uvicorn backend.app.main:app --reload --port 8000
+python3 scripts/run_local.py --check
+python3 scripts/run_local.py
 ```
 
-Check `/health` and then ingest and process an image or supported sonar file.
+`--check` verifies the checksum, loads the model, and validates the exact class mapping. Check `/health` and then ingest and process an image or supported sonar file.
 
 ## Scientific-status note
 

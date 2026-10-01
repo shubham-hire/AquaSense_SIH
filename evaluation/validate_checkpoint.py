@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-validate_checkpoint.py — AquaSense YOLO26 Nano Checkpoint Validation Gate
-=========================================================================
+validate_checkpoint.py — OceanAid YOLO26 Nano Checkpoint Validation Gate
+========================================================================
 PS 26057 | SIH 2026
 
 Validates a YOLO26 Nano model checkpoint before acceptance into the production
@@ -13,14 +13,15 @@ pipeline or evaluation suite:
    - Confirms file size is within edge budget (< 35 MB).
 2. Class taxonomy verification:
    - Confirms expected class names and class order.
-   - Validates whether model is 6-class baseline or 7-class with dedicated ghost_gear:
-       0: human_artifact_wreck
-       1: electrical_cable
-       2: electronic_hazard
-       3: plastic_debris
-       4: metal_drum_scrap
-       5: biological_geological_exclusion
-       6: ghost_gear  (dedicated class)
+   - Validates the production seven-class mapping:
+       0: shipwreck
+       1: submarine_pipeline
+       2: cylinder
+       3: ghost_net
+       4: ghost_pot_trap
+       5: plastic_debris
+       6: metal_debris
+   - Recognizes the historical six-class mapping only for legacy reports.
 3. Test tile execution:
    - Generates a physically-grounded synthetic acoustic SSS test tile (highlight-shadow pair
      + speckle noise) if no real tile is provided.
@@ -42,7 +43,7 @@ from typing import Any
 
 import numpy as np
 
-# Canonical 6-class and 7-class taxonomies
+# Historical six-class mapping and canonical production seven-class mapping
 TAXONOMY_6 = {
     0: "human_artifact_wreck",
     1: "electrical_cable",
@@ -53,13 +54,13 @@ TAXONOMY_6 = {
 }
 
 TAXONOMY_7 = {
-    0: "human_artifact_wreck",
-    1: "electrical_cable",
-    2: "electronic_hazard",
-    3: "plastic_debris",
-    4: "metal_drum_scrap",
-    5: "biological_geological_exclusion",
-    6: "ghost_gear",
+    0: "shipwreck",
+    1: "submarine_pipeline",
+    2: "cylinder",
+    3: "ghost_net",
+    4: "ghost_pot_trap",
+    5: "plastic_debris",
+    6: "metal_debris",
 }
 
 
@@ -234,23 +235,32 @@ def validate_checkpoint(
     has_ghost = any("ghost" in v.lower() for v in names.values())
     results["has_ghost_gear_class"] = has_ghost
 
-    if len(names) == 7 and has_ghost:
-        results["taxonomy_status"] = "7_class_with_dedicated_ghost_gear"
+    if names == TAXONOMY_7:
+        results["taxonomy_status"] = "production_7_class"
+    elif len(names) == 7:
+        results["taxonomy_status"] = "unexpected_7_class_mapping"
+        results["errors"].append(
+            f"Checkpoint class mapping does not match the production taxonomy: {TAXONOMY_7}"
+        )
     elif len(names) == 6 and not has_ghost:
         results["taxonomy_status"] = "6_class_baseline"
         if strict_7_class:
             results["errors"].append(
-                "Model has 6 baseline classes, but --strict-7-class was requested. Dedicated ghost_gear missing."
+                "Model has 6 baseline classes, but --strict-7-class requires the exact production seven-class mapping."
             )
         else:
             results["warnings"].append(
-                "Model has 6 baseline classes (legacy). Ready for operation or retraining to 7 classes with ghost gear."
+                "Model has 6 baseline classes (legacy). Retrain or replace it before production operation."
             )
     elif len(names) == 0:
         results["taxonomy_status"] = "metadata_names_missing"
-        results["warnings"].append("Could not extract class names metadata from checkpoint file directly.")
+        message = "Could not extract class names metadata from checkpoint file directly."
+        (results["errors"] if strict_7_class else results["warnings"]).append(message)
     else:
         results["taxonomy_status"] = f"custom_or_unexpected_{len(names)}_classes"
+        results["errors"].append(
+            f"Checkpoint class mapping is unsupported; expected {TAXONOMY_7}."
+        )
 
     # 4. Test Tile Execution
     if test_tile_path and test_tile_path.exists():
@@ -290,7 +300,7 @@ def validate_checkpoint(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="AquaSense YOLO26 Nano Checkpoint Validation Suite"
+        description="OceanAid YOLO26 Nano Checkpoint Validation Suite"
     )
     parser.add_argument(
         "--model",
@@ -307,7 +317,7 @@ def main() -> None:
     parser.add_argument(
         "--strict-7-class",
         action="store_true",
-        help="Require dedicated 7th ghost_gear class for passing acceptance gate",
+        help="Require the exact production seven-class mapping for the acceptance gate",
     )
     parser.add_argument(
         "--create-mock-weights",
@@ -331,7 +341,7 @@ def main() -> None:
             create_mock_weights_file(model_path, num_classes=7)
 
     print("=" * 65)
-    print("  AQUASENSE: YOLO26 NANO CHECKPOINT VALIDATION GATE")
+    print("  OCEANAID: YOLO26 NANO CHECKPOINT VALIDATION GATE")
     print("=" * 65)
     print(f"[*] Checking checkpoint: {model_path}")
 
@@ -348,7 +358,7 @@ def main() -> None:
     print(f"  [+] Parameter Count         : {report['param_count'] or 'N/A'}")
     print(f"  [+] Taxonomy Status         : {report['taxonomy_status']}")
     print(f"  [+] Total Classes           : {report['num_classes']}")
-    print(f"  [+] Dedicated Ghost Gear    : {report['has_ghost_gear_class']}")
+    print(f"  [+] Ghost Classes Present   : {report['has_ghost_gear_class']}")
     print(f"  [+] Test Tile Forward Pass  : {report['test_tile_passed']} ({report['latency_ms']} ms)")
 
     if report["warnings"]:

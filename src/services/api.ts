@@ -6,25 +6,39 @@ import type { Detection, ReviewDecision, ReviewOutcome, SurveyMission, SurveyNav
  * It is a public URL, never a secret.
  */
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '');
+const configuredApiKey = import.meta.env.VITE_OCEANAID_API_KEY?.trim();
 export const API_BASE = configuredApiBase || '/api';
 
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+function authenticatedResourceUrl(path: string): string {
+  const url = apiUrl(path);
+  if (!configuredApiKey) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}api_key=${encodeURIComponent(configuredApiKey)}`;
+}
+
 /** Build a WebSocket URL without relying on Vercel to host the socket server. */
 export function streamUrl(path: string): string {
   const configuredSocketBase = import.meta.env.VITE_WS_BASE_URL?.trim().replace(/\/$/, '');
-  if (configuredSocketBase) return `${configuredSocketBase}${path}`;
-
-  if (configuredApiBase) {
+  let url: string;
+  if (configuredSocketBase) {
+    url = `${configuredSocketBase}${path}`;
+  } else if (configuredApiBase) {
     const apiOrigin = new URL(configuredApiBase);
     apiOrigin.protocol = apiOrigin.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${apiOrigin.toString().replace(/\/$/, '')}${path}`;
+    url = `${apiOrigin.toString().replace(/\/$/, '')}${path}`;
+  } else {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    url = `${protocol}://${window.location.host}${API_BASE}${path}`;
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${protocol}://${window.location.host}${API_BASE}${path}`;
+  if (!configuredApiKey) return url;
+  const authenticatedUrl = new URL(url);
+  authenticatedUrl.searchParams.set('api_key', configuredApiKey);
+  return authenticatedUrl.toString();
 }
 
 export interface BackendQcReport {
@@ -40,14 +54,16 @@ interface IngestResponse {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), init);
+  const headers = new Headers(init?.headers);
+  if (configuredApiKey) headers.set('X-API-Key', configuredApiKey);
+  const response = await fetch(apiUrl(path), { ...init, headers });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     throw new Error(detail.detail || `Backend request failed (${response.status})`);
   }
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    throw new Error('The API endpoint returned an unexpected response. Set VITE_API_BASE_URL to your deployed AquaSense API on Vercel.');
+    throw new Error('The API endpoint returned an unexpected response. Set VITE_API_BASE_URL to your deployed OceanAid API on Vercel.');
   }
   return response.json() as Promise<T>;
 }
@@ -226,11 +242,12 @@ export async function deleteReview(detectionId: string): Promise<{ ok: boolean }
 
 /** Backend-generated reports include the same refusal/provenance fields seen in the console. */
 export function reportDownloadUrl(surveyId: string, format: 'json' | 'csv' | 'geojson' | 'pdf'): string {
-  const base = apiUrl(`/v1/surveys/${encodeURIComponent(surveyId)}`);
-  return format === 'geojson' ? `${base}/geojson` : `${base}/report.${format}`;
+  const base = `/v1/surveys/${encodeURIComponent(surveyId)}`;
+  const path = format === 'geojson' ? `${base}/geojson` : `${base}/report.${format}`;
+  return authenticatedResourceUrl(path);
 }
 
 /** Normalized image artifact generated during XTF, JSF, or SL2 ingestion. */
 export function waterfallImageUrl(surveyId: string): string {
-  return apiUrl(`/v1/surveys/${encodeURIComponent(surveyId)}/waterfall.png`);
+  return authenticatedResourceUrl(`/v1/surveys/${encodeURIComponent(surveyId)}/waterfall.png`);
 }

@@ -7,7 +7,7 @@ PS 26057 | SIH 2026
 Unified CLI coordinating the four acceptance gates before and after model weights arrive:
   1. Checkpoint validation:
      - YOLO26 Nano architecture (< 35MB, < 10M params)
-     - Taxonomy check (6-class baseline or 7-class with dedicated ghost_gear)
+     - Taxonomy check (legacy baseline or exact production seven-class mapping)
      - Test tile forward pass & latency
   2. Evaluation runner:
      - Runs inference on held-out dataset tiles
@@ -61,7 +61,7 @@ def run_pipeline(
         stages = ["validate", "eval", "calibrate", "profile"]
 
     print("=" * 70)
-    print("  AQUASENSE: MODEL ACCEPTANCE & EVALUATION PIPELINE")
+    print("  OCEANAID: MODEL ACCEPTANCE & EVALUATION PIPELINE")
     print("=" * 70)
     print(f"[*] Target Checkpoint : {model_path}")
     print(f"[*] Stages to Execute : {', '.join(stages)}")
@@ -97,7 +97,7 @@ def run_pipeline(
         print(f"  [+] File Exists       : {val_res['file_exists']} ({val_res['file_size_mb']} MB)")
         print(f"  [+] Architecture      : {val_res['format']} ({val_res['param_count'] or 'N/A'} params)")
         print(f"  [+] Taxonomy Status   : {val_res['taxonomy_status']} ({val_res['num_classes']} classes)")
-        print(f"  [+] Dedicated Ghost   : {val_res['has_ghost_gear_class']}")
+        print(f"  [+] Ghost Classes     : {val_res['has_ghost_gear_class']}")
         print(f"  [+] Test Tile Pass    : {val_res['test_tile_passed']} ({val_res['latency_ms']} ms)")
         print(f"  --> GATE STATUS       : {'PASSED' if val_res['checks_passed'] else 'FAILED'}")
         if not val_res["checks_passed"]:
@@ -252,7 +252,7 @@ def main() -> None:
     parser.add_argument(
         "--strict-7-class",
         action="store_true",
-        help="Require 7th dedicated ghost_gear class in validation gate",
+        help="Require the exact production seven-class mapping in the validation gate",
     )
     parser.add_argument(
         "--quick",

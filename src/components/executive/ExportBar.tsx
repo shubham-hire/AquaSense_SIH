@@ -20,15 +20,15 @@ export const ExportBar: React.FC = () => {
 
     if (type === 'json') {
       const content = generateReportJson(activeSurvey, surveyDetections);
-      downloadFile(content, `AquaSense_${activeSurvey.id}_report_${timestamp}.json`, 'application/json');
+      downloadFile(content, `OceanAid_${activeSurvey.id}_report_${timestamp}.json`, 'application/json');
       notifySuccess('Structured JSON Report');
     } else if (type === 'csv') {
       const content = generateReportCsv(activeSurvey, surveyDetections);
-      downloadFile(content, `AquaSense_${activeSurvey.id}_report_${timestamp}.csv`, 'text/csv');
+      downloadFile(content, `OceanAid_${activeSurvey.id}_report_${timestamp}.csv`, 'text/csv');
       notifySuccess('Structured CSV Report');
     } else if (type === 'geojson') {
       const content = generateGeoJson(activeSurvey, surveyDetections);
-      downloadFile(content, `AquaSense_${activeSurvey.id}_hazards_${timestamp}.geojson`, 'application/geo+json');
+      downloadFile(content, `OceanAid_${activeSurvey.id}_hazards_${timestamp}.geojson`, 'application/geo+json');
       notifySuccess('GIS GeoJSON Layer');
     } else if (type === 'pdf') {
       window.print();

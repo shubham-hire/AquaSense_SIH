@@ -296,7 +296,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("=" * 65)
-    print("  AQUASENSE: EDGE DEPLOYMENT PROFILER")
+    print("  OCEANAID: EDGE DEPLOYMENT PROFILER")
     print("=" * 65)
     print(f"[*] Model  : {args.model}")
     print(f"[*] Device : {args.device}")

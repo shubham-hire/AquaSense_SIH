@@ -1,7 +1,7 @@
 """
 detector.py — YOLO26 Nano Model Integration Adapter
 =====================================================
-AquaSense PS 26057 | SIH 2026
+OceanAid PS 26057 | SIH 2026
 
 Public contract
 ---------------
@@ -48,6 +48,10 @@ MIN_HEIGHT_M: float = 0.05
 DEFAULT_RESOLUTION_M_PER_PX: float = 0.1
 
 ModelStatus = Literal["not_loaded", "ready", "unavailable"]
+
+
+class DetectorInferenceError(RuntimeError):
+    """Raised when a ready detector cannot complete an inference batch."""
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +203,7 @@ class RawDetection:
 # ---------------------------------------------------------------------------
 
 class Yolo26Adapter:
-    """Swappable detector backend for AquaSense.
+    """Swappable detector backend for OceanAid.
 
     Lifecycle
     ---------
@@ -331,7 +335,9 @@ class Yolo26Adapter:
                     "Inference error on batch starting at tile %d: %s",
                     batch_start, exc, exc_info=True,
                 )
-                continue
+                raise DetectorInferenceError(
+                    f"Inference failed for tile batch starting at index {batch_start}"
+                ) from exc
 
             for tile_result, tile_idx in zip(raw_outputs, batch_indices):
                 for raw in tile_result:

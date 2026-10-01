@@ -102,7 +102,7 @@ class TestCalibration:
             GTBox("tile_1", "M1", 0, Box(0.2, 0.2, 0.1, 0.1)),
         ]
         preds = [
-            # High-confidence true positive on class 6 (ghost_gear)
+            # High-confidence true positive on class 6 (metal_debris)
             PredBox("tile_1", "M1", 6, 0.90, Box(0.51, 0.51, 0.2, 0.2)),
             # False positive on background
             PredBox("tile_1", "M1", 3, 0.70, Box(0.8, 0.8, 0.1, 0.1)),
@@ -143,7 +143,7 @@ class TestCalibration:
         ledger = json.loads(res["scales_path"].read_text())
         assert "global_model" in ledger
         assert "per_class_models" in ledger
-        assert "ghost_gear" in ledger["per_class_models"]
+        assert "metal_debris" in ledger["per_class_models"]
         assert ledger["total_calibration_samples"] == 200
 
 
@@ -163,7 +163,7 @@ class TestEvaluationRunner:
                 "annotations": [
                     {
                         "class_id": 6 if i % 2 == 0 else 0,
-                        "class_name": "ghost_gear" if i % 2 == 0 else "human_artifact_wreck",
+                        "class_name": "metal_debris" if i % 2 == 0 else "shipwreck",
                         "box_cx_norm": 0.5,
                         "box_cy_norm": 0.5,
                         "box_w_norm": 0.2,
@@ -221,19 +221,19 @@ class TestEvaluationRunner:
 # ---------------------------------------------------------------------------
 
 class TestTaxonomyIntegrity:
-    def test_config_yaml_has_ghost_gear_and_nc_7(self):
+    def test_config_yaml_matches_production_class_6_and_nc_7(self):
         import yaml
         config_path = Path("configs/sonar_debris_yolo26.yaml")
         assert config_path.exists()
         with config_path.open() as f:
             data = yaml.safe_load(f)
         assert data["nc"] == 7
-        assert data["names"][6] == "ghost_gear"
+        assert data["names"][6] == "metal_debris"
 
-    def test_backend_detector_has_ghost_gear(self):
+    def test_backend_detector_matches_production_class_6(self):
         try:
             from app.detector import CLASS_NAMES
         except ImportError:
             from backend.app.detector import CLASS_NAMES
         assert 6 in CLASS_NAMES
-        assert CLASS_NAMES[6] == "ghost_gear"
+        assert CLASS_NAMES[6] == "metal_debris"

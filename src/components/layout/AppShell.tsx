@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useSurveyStore } from '../../store/useSurveyStore';
 import { useLiveDetectionSocket } from '../../services/socket';
 import { fetchPersistedSurveys, fetchSurveyDetections } from '../../services/api';
@@ -8,17 +8,18 @@ import {
   Radar, 
   Layers, 
   Terminal, 
-  ShieldCheck, 
-  Play, 
-  Pause, 
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  AlertTriangle,
+  X,
+  Play,
+  Pause,
   RotateCcw,
-  Sparkles,
-  ChevronDown
 } from 'lucide-react';
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const {
     surveys,
     activeSurveyId,
@@ -27,6 +28,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setMode,
     isLiveStreaming,
     setIsLiveStreaming,
+    processingError,
+    clearProcessingError,
     resetStream,
     detections,
     hydrateSurveys,
@@ -64,6 +67,36 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [activeSurveyId, isLiveStreaming, replaceSurveyDetections]);
 
   const activeSurvey = surveys.find((s) => s.id === activeSurveyId) ?? null;
+  const activeSurveyDetections = detections.filter((detection) => detection.surveyId === activeSurveyId);
+  const calibrationStatus = activeSurveyDetections.length === 0
+    ? 'unknown'
+    : activeSurveyDetections.every((detection) => detection.calibrated)
+      ? 'calibrated'
+      : 'uncalibrated';
+  const calibrationDisplay = calibrationStatus === 'calibrated'
+    ? {
+        label: 'PLATT CALIBRATED',
+        title: 'Every detection in the active survey is marked calibrated.',
+        className: 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 hover:border-emerald-400',
+        iconClassName: 'text-emerald-400',
+        Icon: ShieldCheck,
+      }
+    : calibrationStatus === 'uncalibrated'
+      ? {
+          label: 'NOT CALIBRATED',
+          title: 'At least one detection in the active survey is marked calibrated: false.',
+          className: 'bg-amber-950/40 border-amber-500/40 text-amber-300 hover:border-amber-400',
+          iconClassName: 'text-amber-400',
+          Icon: ShieldAlert,
+        }
+      : {
+          label: 'CALIBRATION UNKNOWN',
+          title: 'No detections are available for the active survey, so calibration status is unknown.',
+          className: 'bg-slate-900/70 border-slate-600/60 text-slate-300 hover:border-slate-500',
+          iconClassName: 'text-slate-400',
+          Icon: ShieldQuestion,
+        };
+  const CalibrationIcon = calibrationDisplay.Icon;
 
   const handleToggleMode = () => {
     if (mode === 'operator') {
@@ -79,7 +112,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     <div className="app-ocean h-screen overflow-hidden flex flex-col bg-[#111A2A] text-slate-100">
       <InteractiveCursor />
       {/* Top Telemetry & Command Bar */}
-      <header className="z-50 h-16 shrink-0 border-b border-cyan-300/20 bg-[#142238]/90 backdrop-blur-md px-4 flex items-center justify-between gap-4">
+      <header className="relative z-50 h-16 shrink-0 border-b border-cyan-300/20 bg-[#142238]/90 backdrop-blur-md px-4 flex items-center justify-between gap-4">
         {/* Left: Branding & Vessel Profile */}
         <div className="flex items-center gap-3">
           <div 
@@ -92,7 +125,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-heading font-extrabold text-lg text-white tracking-wide">
-                  AQUA<span className="text-cyan-400">SENSE</span>
+                  OCEAN<span className="text-cyan-400">AID</span>
                 </span>
                 <span className="text-[10px] font-mono uppercase bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded">
                   MoES / NIOT
@@ -199,14 +232,34 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </button>
 
           {/* Model Calibration Status Indicator */}
-          <div 
+          <div
             onClick={() => navigate('/settings/calibration')}
-            className="hidden sm:flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 px-2.5 py-1.5 rounded-lg text-xs font-mono cursor-pointer hover:border-emerald-400 transition-colors"
+            title={calibrationDisplay.title}
+            className={`hidden sm:flex items-center gap-1.5 border px-2.5 py-1.5 rounded-lg text-xs font-mono cursor-pointer transition-colors ${calibrationDisplay.className}`}
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden xl:inline">PLATT CALIBRATED</span>
+            <CalibrationIcon className={`w-3.5 h-3.5 ${calibrationDisplay.iconClassName}`} />
+            <span className="hidden xl:inline">{calibrationDisplay.label}</span>
           </div>
         </div>
+
+        {processingError && (
+          <div
+            role="alert"
+            className="absolute top-full left-1/2 mt-2 flex w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-950/95 px-3 py-2 text-xs font-mono text-rose-200 shadow-lg backdrop-blur-md"
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+            <span className="min-w-0 flex-1 truncate" title={processingError}>{processingError}</span>
+            <button
+              type="button"
+              onClick={clearProcessingError}
+              title="Dismiss processing error"
+              aria-label="Dismiss processing error"
+              className="shrink-0 rounded p-0.5 text-rose-300 transition-colors hover:bg-rose-900 hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Main Body with Persistent Navigation */}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "title": "Load project repair guidance and inspect current diffs",
+      "status": "done"
+    },
+    {
+      "title": "Fix backend inference, processing, review, and authentication behavior",
+      "status": "done"
+    },
+    {
+      "title": "Fix frontend processing errors, review hydration, and calibration status",
+      "status": "done"
+    },
+    {
+      "title": "Repair backend and evaluation test drift",
+      "status": "done"
+    },
+    {
+      "title": "Synchronize package and deployment documentation",
+      "status": "done"
+    },
+    {
+      "title": "Run full verification and review final diff",
+      "status": "done"
+    }
+  ],
+  "updated_at": "2026-10-01T14:51:27.849Z",
+  "session_id": "01a0f7c9-358a-7158-9753-f6dc1655727f"
+}

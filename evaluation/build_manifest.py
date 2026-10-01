@@ -24,7 +24,7 @@ line is one tile record:
             {
                 "ann_id":    "train__SeabedObjects__wreck_001__0__ann0",
                 "class_id":  0,
-                "class_name": "human_artifact_wreck",
+                "class_name": "shipwreck",
                 "box_cx_norm": 0.512,
                 "box_cy_norm": 0.380,
                 "box_w_norm":  0.240,
@@ -58,15 +58,16 @@ from pathlib import Path
 from PIL import Image
 
 # ---------------------------------------------------------------------------
-# 6-class taxonomy (must match configs/sonar_debris_yolo26.yaml)
+# Production taxonomy (must match configs/sonar_debris_yolo26.yaml)
 # ---------------------------------------------------------------------------
 CLASS_NAMES: dict[int, str] = {
-    0: "human_artifact_wreck",
-    1: "electrical_cable",
-    2: "electronic_hazard",
-    3: "plastic_debris",
-    4: "metal_drum_scrap",
-    5: "biological_geological_exclusion",
+    0: "shipwreck",
+    1: "submarine_pipeline",
+    2: "cylinder",
+    3: "ghost_net",
+    4: "ghost_pot_trap",
+    5: "plastic_debris",
+    6: "metal_debris",
 }
 
 # Tile filename convention for XTF-tiled images:

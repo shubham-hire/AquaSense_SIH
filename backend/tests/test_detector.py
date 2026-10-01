@@ -21,6 +21,7 @@ from app.detector import (
     CLASS_NAMES,
     DEFAULT_RESOLUTION_M_PER_PX,
     DetectorConfig,
+    DetectorInferenceError,
     RawDetection,
     Yolo26Adapter,
     get_adapter,
@@ -128,6 +129,22 @@ class TestAdapterNotInstalled:
                     "confidence_threshold", "iou_threshold",
                     "tile_size", "batch_size", "device", "backend"):
             assert key in info, f"describe() missing key: {key}"
+
+
+class TestInferenceFailures:
+    def test_ready_adapter_raises_instead_of_reporting_empty_results(self, tmp_path, monkeypatch):
+        model = tmp_path / "model.pt"
+        model.write_bytes(b"test")
+        adapter = Yolo26Adapter(DetectorConfig(model_path=model, batch_size=1))
+        adapter.status = "ready"
+        monkeypatch.setattr(
+            adapter,
+            "_infer_ultralytics",
+            lambda _batch: (_ for _ in ()).throw(RuntimeError("backend crashed")),
+        )
+
+        with pytest.raises(DetectorInferenceError, match="Inference failed"):
+            adapter.run_batch([_dummy_tile()])
 
 
 # ---------------------------------------------------------------------------

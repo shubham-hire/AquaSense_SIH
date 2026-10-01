@@ -140,7 +140,7 @@ function createCustomPinIcon(threatLevel: string, confidence: number, isNet: boo
   });
 }
 
-const CARTO_API_KEY = (import.meta.env.VITE_CARTO_API_KEY as string | undefined) || 'cb1_3pya_1_1e003f859813dc6bda968c6d';
+const CARTO_API_KEY = (import.meta.env.VITE_CARTO_API_KEY as string | undefined)?.trim() || '';
 const CARTO_TILE_URL = `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png${
   CARTO_API_KEY ? `?key=${encodeURIComponent(CARTO_API_KEY)}` : ''
 }`;

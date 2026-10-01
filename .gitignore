@@ -45,6 +45,12 @@ models_checkpoints/
 temp_training_bundle/
 data/downloaded/
 data/unified_training_dataset/
+data/uploads/
+data/artifacts/
+data/models/
+backend/data/
+**/uploads/
+**/artifacts/
 
 # ==============================================================================
 # Environment & Logs

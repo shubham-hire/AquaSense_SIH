@@ -171,6 +171,9 @@ def test_processing_reports_failure_and_stores_nothing_when_model_missing(
 
         assert message["event"] == "processing.failed"
         assert pipeline.SYNTHETIC_FALLBACK_ENV in message["detail"]
+        persisted_status = client.get(f"/v1/surveys/{survey_id}/processing")
+        assert persisted_status.status_code == 200
+        assert persisted_status.json()["event"] == "processing.failed"
 
         detections = client.get(f"/v1/surveys/{survey_id}/detections")
         assert detections.status_code == 200

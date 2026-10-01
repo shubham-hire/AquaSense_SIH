@@ -22,7 +22,7 @@ export const AblationPanel: React.FC = () => {
             Proven Negative Results & Scientific Ablations
           </h2>
           <p className="text-xs text-slate-400 mt-0.5 font-sans max-w-3xl">
-            AquaSense directly displays every architecture, filter, and scoring technique that failed under empirical testing. Rather than hiding negative results or claiming unproven capabilities, every decision is substantiated with live, regenerable metrics.
+            OceanAid directly displays every architecture, filter, and scoring technique that failed under empirical testing. Rather than hiding negative results or claiming unproven capabilities, every decision is substantiated with live, regenerable metrics.
           </p>
         </div>
 

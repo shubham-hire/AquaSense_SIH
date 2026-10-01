@@ -1,1 +1,1 @@
-"""AquaSense offline-first FastAPI backend."""
+"""OceanAid offline-first FastAPI backend."""

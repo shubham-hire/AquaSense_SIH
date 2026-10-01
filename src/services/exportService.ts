@@ -39,7 +39,7 @@ export function generateReportJson(survey: SurveyMission, detections: Detection[
 
   const payload = {
     report_metadata: {
-      generator: 'AquaSense MoES / NIOT SIH 2026 PS 26057',
+      generator: 'OceanAid MoES / NIOT SIH 2026 PS 26057',
       survey_id: survey.id,
       survey_name: survey.name,
       vessel: survey.vesselName,
@@ -141,7 +141,7 @@ export function generateGeoJson(survey: SurveyMission, detections: Detection[]):
   return JSON.stringify(
     {
       type: 'FeatureCollection',
-      name: `AquaSense_${survey.id}_Spatial_Hazards`,
+      name: `OceanAid_${survey.id}_Spatial_Hazards`,
       features,
     },
     null,

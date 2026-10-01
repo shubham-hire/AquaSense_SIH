@@ -18,7 +18,7 @@ def test_pipeline_defaults_to_committed_checkpoint() -> None:
         [
             sys.executable,
             "-c",
-            "import os; import app.pipeline; print(os.environ['AQUASENSE_MODEL_PATH'])",
+            "import os; import backend.app.pipeline; print(os.environ['AQUASENSE_MODEL_PATH'])",
         ],
         cwd=repository_root,
         env=environment,

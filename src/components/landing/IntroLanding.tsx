@@ -155,7 +155,7 @@ export const IntroLanding: React.FC = () => {
       <header className="intro-nav">
         <div className="intro-brand">
           <span className="intro-brand__mark"><Waves /></span>
-          <span>AQUA<span>SENSE</span></span>
+          <span>OCEAN<span>AID</span></span>
         </div>
         <nav className="intro-nav__links">
           <button type="button" onClick={exploreMissions} className="intro-nav__link">Mission intake</button>

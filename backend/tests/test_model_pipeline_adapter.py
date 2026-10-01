@@ -13,7 +13,7 @@ class StubReadyAdapter:
     """A deterministic YOLO26 stand-in used to exercise the production bridge."""
 
     is_ready = True
-    config = SimpleNamespace(tile_size=16)
+    config = SimpleNamespace(tile_size=16, batch_size=4, model_path="/missing/test-best.pt")
 
     def __init__(self) -> None:
         self.calls: list[tuple[int, float]] = []
@@ -51,16 +51,16 @@ def test_ready_adapter_drives_pipeline_and_refuses_image_coordinates(tmp_path, m
     assert adapter.calls == [(4, 0.1)]
     assert len(result) == 1
     detection = result[0]
-    assert detection["classification"] == "metal_drum_scrap"
+    assert detection["classification"] == "ghost_pot_trap"
     assert detection["model_version"] == "yolo26n-test (best.pt)"
-    assert detection["provenance"]["detector_backend"] == "ultralytics"
+    assert detection["provenance"]["detector_backend"] == "ultralytics-yolo26"
     assert detection["position"] == {
         "latitude": None,
         "longitude": None,
         "position_source": "UNAVAILABLE",
-        "refusal_reason": "Valid navigation metadata was not available for this detection ping.",
+        "refusal_reason": "Valid source navigation was unavailable for this detection row.",
     }
-    assert len(detection["verification_features"]) == 10
+    assert detection["verification_features"] == {}
 
 
 def test_ready_adapter_uses_only_the_backprojected_valid_navigation_fix(tmp_path, monkeypatch):
@@ -69,6 +69,7 @@ def test_ready_adapter_uses_only_the_backprojected_valid_navigation_fix(tmp_path
     qc, _ = inspect_file("survey-nav", source, source.name)
     extraction = {
         "waterfall_path": str(source),
+        "cross_track_resolution_m_per_pixel": 0.1,
         "navigation": [
             {
                 "row_index": row,
@@ -77,6 +78,7 @@ def test_ready_adapter_uses_only_the_backprojected_valid_navigation_fix(tmp_path
                 "valid_fix": row == 8,
                 "latitude": 12.34 if row == 8 else None,
                 "longitude": 76.78 if row == 8 else None,
+                "heading_deg": 90.0 if row == 8 else None,
             }
             for row in range(16)
         ],

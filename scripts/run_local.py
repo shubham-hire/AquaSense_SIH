@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Run AquaSense entirely on this machine.
+"""Run OceanAid entirely on this machine.
 
-AquaSense is offline-first: the checkpoint, the SQLite database, the sonar
+OceanAid is offline-first: the checkpoint, the SQLite database, the sonar
 artifacts, and the exports all live on local disk, so no hosted service is
 required to process a survey. This script verifies the setup, then starts the
 API and the web console together.
@@ -87,7 +87,7 @@ def checkpoint_problem():
         return (
             "The detection checkpoint is missing at "
             + str(CHECKPOINT)
-            + ". It ships with the repository, so restore best.pt before running AquaSense."
+            + ". It ships with the repository, so restore best.pt before running OceanAid."
         )
     actual = file_sha256(CHECKPOINT)
     if actual != CHECKPOINT_SHA256:
@@ -100,6 +100,25 @@ def checkpoint_problem():
             + actual
         )
     return None
+
+
+def model_runtime_problem() -> str | None:
+    """Load the checkpoint and verify its class contract in an isolated process."""
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-m", "backend.app.preflight"],
+            cwd=ROOT,
+            env=local_environment(),
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"The detection model runtime check could not run: {exc}"
+    if completed.returncode == 0:
+        return None
+    detail = completed.stderr.strip() or completed.stdout.strip() or "unknown preflight error"
+    return "The detection model failed runtime validation:\n  " + detail.replace("\n", "\n  ")
 
 
 def check_setup() -> list:
@@ -115,6 +134,10 @@ def check_setup() -> list:
             + ", ".join(absent)
             + "\n  Install them with: python3 -m pip install -r backend/requirements.txt"
         )
+    if problem is None and not absent:
+        runtime_problem = model_runtime_problem()
+        if runtime_problem:
+            problems.append(runtime_problem)
     return problems
 
 
@@ -155,7 +178,7 @@ def start_frontend(environment: dict):
 
 
 def main(argv: list | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run AquaSense locally.")
+    parser = argparse.ArgumentParser(description="Run OceanAid locally.")
     parser.add_argument("--backend", action="store_true", help="start only the API")
     parser.add_argument("--check", action="store_true", help="verify setup and exit")
     parser.add_argument("--port", type=int, default=BACKEND_PORT, help="API port")
@@ -163,7 +186,7 @@ def main(argv: list | None = None) -> int:
 
     problems = check_setup()
     if problems:
-        print("AquaSense cannot start:\n", file=sys.stderr)
+        print("OceanAid cannot start:\n", file=sys.stderr)
         for problem in problems:
             print("- " + problem + "\n", file=sys.stderr)
         return 1

@@ -17,7 +17,7 @@ export const LandingPage: React.FC = () => {
             </span>
           </div>
           <h1 className="text-3xl font-heading font-black text-white tracking-tight">
-            AQUA<span className="text-cyan-400">SENSE</span>
+            OCEAN<span className="text-cyan-400">AID</span>
           </h1>
           <p className="text-sm text-slate-300 max-w-2xl mt-1 font-sans">
             AI-Powered Automated Underwater Marine Debris & Anomaly Detection System using Side-Scan Sonar Imagery. Scientifically verified false-positive suppression, hard refusal invariants, and real-time geospatial hazard mapping.

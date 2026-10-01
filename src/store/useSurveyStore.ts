@@ -22,6 +22,9 @@ interface SurveyState {
   setDspFilterActive: (active: boolean) => void;
   isLiveStreaming: boolean;
   setIsLiveStreaming: (streaming: boolean) => void;
+  processingError: string | null;
+  setProcessingError: (error: string) => void;
+  clearProcessingError: () => void;
   streamedDetections: Detection[];
   addStreamedDetection: (detection: Detection) => void;
   replaceSurveyDetections: (surveyId: string, detections: Detection[]) => void;
@@ -101,7 +104,14 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   setDspFilterActive: (dspFilterActive) => set({ dspFilterActive }),
 
   isLiveStreaming: false,
-  setIsLiveStreaming: (isLiveStreaming) => set({ isLiveStreaming }),
+  setIsLiveStreaming: (isLiveStreaming) =>
+    set((state) => ({
+      isLiveStreaming,
+      processingError: isLiveStreaming ? null : state.processingError,
+    })),
+  processingError: null,
+  setProcessingError: (processingError) => set({ processingError, isLiveStreaming: false }),
+  clearProcessingError: () => set({ processingError: null }),
   // Live results must start empty; demo records must never appear as model output.
   streamedDetections: [],
 
@@ -129,7 +139,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
       ),
     })),
 
-  resetStream: () => set({ streamedDetections: [], isLiveStreaming: false }),
+  resetStream: () => set({ streamedDetections: [], isLiveStreaming: false, processingError: null }),
 
   // The backend already applies its configured 10% inference threshold. Matching
   // that value prevents valid low-confidence candidates from being hidden by default.

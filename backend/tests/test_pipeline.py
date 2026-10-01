@@ -1,3 +1,4 @@
+import app.pipeline as pipeline
 from app.pipeline import inspect_file, run_pipeline
 
 
@@ -7,6 +8,7 @@ def test_pipeline_never_fabricates_coordinates_for_image_upload(tmp_path, monkey
     # This case runs without model weights, so synthetic output must be opted
     # into explicitly; the pipeline otherwise refuses to fabricate detections.
     monkeypatch.setenv("AQUASENSE_ALLOW_SYNTHETIC_FALLBACK", "1")
+    monkeypatch.setattr(pipeline, "get_adapter", lambda: type("Unavailable", (), {"is_ready": False})())
     source = tmp_path / "survey.png"
     Image.new("L", (16, 16), color=80).save(source)
     qc, extraction = inspect_file("survey-1", source, "survey.png")

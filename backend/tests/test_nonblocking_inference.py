@@ -7,9 +7,13 @@ import app.main as main_module
 class _Repository:
     def __init__(self):
         self.saved = None
+        self.processing_status = None
 
     def replace_detections(self, survey_id, detections):
         self.saved = (survey_id, detections)
+
+    def save_processing_status(self, survey_id, payload):
+        self.processing_status = (survey_id, payload)
 
 
 class _EventHub:
@@ -45,4 +49,5 @@ def test_cpu_inference_does_not_block_asyncio_event_loop(monkeypatch):
 
     asyncio.run(scenario())
     assert repository.saved == ("survey-1", [{"id": "detection-1"}])
+    assert repository.processing_status[1]["event"] == "processing.complete"
     assert hub.events[-1][1] == "processing.complete"

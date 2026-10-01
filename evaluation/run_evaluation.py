@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_evaluation.py — AquaSense End-to-End Evaluation Runner
+run_evaluation.py — OceanAid End-to-End Evaluation Runner
 ==========================================================
 PS 26057 | SIH 2026
 
@@ -385,7 +385,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("=" * 65)
-    print("  AQUASENSE: MODEL EVALUATION RUNNER")
+    print("  OCEANAID: MODEL EVALUATION RUNNER")
     print("=" * 65)
     print(f"[*] Manifest : {args.manifest}")
     print(f"[*] Split    : {args.split}")

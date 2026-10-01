@@ -48,6 +48,19 @@ class Repository:
                     review_json  TEXT NOT NULL,
                     updated_at   TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS detection_review_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    detection_id TEXT NOT NULL,
+                    survey_id TEXT NOT NULL,
+                    detection_json TEXT NOT NULL,
+                    review_json TEXT NOT NULL,
+                    archived_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS processing_status (
+                    survey_id TEXT PRIMARY KEY REFERENCES surveys(id),
+                    payload_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             columns = {row[1] for row in conn.execute("PRAGMA table_info(surveys)")}
@@ -100,7 +113,33 @@ class Repository:
         return row["source_path"], json.loads(row["qc_json"]), json.loads(row["extraction_json"]) if row["extraction_json"] else None
 
     def replace_detections(self, survey_id: str, detections: list[dict]) -> None:
+        """Replace the active inference result while preserving reviewed history."""
+        archived_at = datetime.now(timezone.utc).isoformat()
         with self.connection() as conn:
+            reviewed = conn.execute(
+                """
+                SELECT d.id, d.payload_json, dr.review_json
+                FROM detections AS d
+                JOIN detection_reviews AS dr ON dr.detection_id = d.id
+                WHERE d.survey_id = ?
+                """,
+                (survey_id,),
+            ).fetchall()
+            conn.executemany(
+                """
+                INSERT INTO detection_review_history
+                    (detection_id, survey_id, detection_json, review_json, archived_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (row["id"], survey_id, row["payload_json"], row["review_json"], archived_at)
+                    for row in reviewed
+                ],
+            )
+            conn.execute(
+                "DELETE FROM detection_reviews WHERE detection_id IN (SELECT id FROM detections WHERE survey_id=?)",
+                (survey_id,),
+            )
             conn.execute("DELETE FROM detections WHERE survey_id=?", (survey_id,))
             conn.executemany(
                 "INSERT INTO detections (id, survey_id, payload_json) VALUES (?, ?, ?)",
@@ -108,9 +147,68 @@ class Repository:
             )
 
     def detections_for_survey(self, survey_id: str) -> list[dict]:
+        """Return active detections enriched with persisted operator reviews."""
         with self.connection() as conn:
-            rows = conn.execute("SELECT payload_json FROM detections WHERE survey_id=? ORDER BY id", (survey_id,)).fetchall()
-        return [json.loads(row["payload_json"]) for row in rows]
+            rows = conn.execute(
+                """
+                SELECT d.payload_json, dr.review_json
+                FROM detections AS d
+                LEFT JOIN detection_reviews AS dr ON dr.detection_id = d.id
+                WHERE d.survey_id = ?
+                ORDER BY d.id
+                """,
+                (survey_id,),
+            ).fetchall()
+        detections = []
+        for row in rows:
+            detection = json.loads(row["payload_json"])
+            detection["review"] = json.loads(row["review_json"]) if row["review_json"] else None
+            detections.append(detection)
+        return detections
+
+    def review_history_for_survey(self, survey_id: str) -> list[dict]:
+        """Return archived review decisions from previous processing runs."""
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT detection_id, detection_json, review_json, archived_at
+                FROM detection_review_history
+                WHERE survey_id = ?
+                ORDER BY id
+                """,
+                (survey_id,),
+            ).fetchall()
+        return [
+            {
+                "detection_id": row["detection_id"],
+                "detection": json.loads(row["detection_json"]),
+                "review": json.loads(row["review_json"]),
+                "archived_at": row["archived_at"],
+            }
+            for row in rows
+        ]
+
+    def save_processing_status(self, survey_id: str, payload: dict) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO processing_status (survey_id, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(survey_id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                """,
+                (survey_id, json.dumps(payload), now),
+            )
+
+    def get_processing_status(self, survey_id: str) -> dict | None:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT payload_json FROM processing_status WHERE survey_id=?",
+                (survey_id,),
+            ).fetchone()
+        return json.loads(row["payload_json"]) if row else None
 
     def detection(self, detection_id: str) -> dict | None:
         with self.connection() as conn:

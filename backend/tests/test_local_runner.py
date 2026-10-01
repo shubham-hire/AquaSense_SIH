@@ -80,6 +80,7 @@ def test_check_mode_passes_when_nothing_is_missing(runner, monkeypatch, capsys) 
     # CI intentionally runs without ultralytics installed, so the dependency
     # probe is stubbed to isolate the checkpoint and reporting behaviour.
     monkeypatch.setattr(runner, "missing_modules", lambda: [])
+    monkeypatch.setattr(runner, "model_runtime_problem", lambda: None)
     assert runner.main(["--check"]) == 0
     assert "No cloud services are required" in capsys.readouterr().out
 
@@ -91,6 +92,13 @@ def test_check_mode_reports_every_missing_package(runner, monkeypatch, capsys) -
     assert "ultralytics" in error_output
     assert "pyxtf" in error_output
     assert "backend/requirements.txt" in error_output
+
+
+def test_check_mode_reports_model_runtime_failure(runner, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(runner, "missing_modules", lambda: [])
+    monkeypatch.setattr(runner, "model_runtime_problem", lambda: "model class mapping is invalid")
+    assert runner.main(["--check"]) == 1
+    assert "model class mapping is invalid" in capsys.readouterr().err
 
 
 def test_missing_checkpoint_is_reported_clearly(runner, monkeypatch, tmp_path) -> None:

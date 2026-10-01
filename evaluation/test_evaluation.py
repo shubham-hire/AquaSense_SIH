@@ -17,8 +17,8 @@ import pytest
 # ---------------------------------------------------------------------------
 
 CLASS_NAMES = {
-    0: "human_artifact_wreck", 1: "electrical_cable", 2: "electronic_hazard",
-    3: "plastic_debris", 4: "metal_drum_scrap", 5: "biological_geological_exclusion",
+    0: "shipwreck", 1: "submarine_pipeline", 2: "cylinder",
+    3: "ghost_net", 4: "ghost_pot_trap", 5: "plastic_debris", 6: "metal_debris",
 }
 
 def _make_dataset(root: Path, mission_tiles: dict[str, dict[str, list]]) -> None:
@@ -97,7 +97,7 @@ class TestBuildManifest:
         rec = json.loads(out.read_text().splitlines()[0])
         ann = rec["annotations"][0]
         assert ann["class_id"] == 3
-        assert ann["class_name"] == "plastic_debris"
+        assert ann["class_name"] == "ghost_net"
         assert ann["box_cx_norm"] == pytest.approx(0.512, abs=1e-4)
         assert ann["box_w_norm"]  == pytest.approx(0.240, abs=1e-4)
 
@@ -295,12 +295,12 @@ class TestMetrics:
         gt, preds = self._make_gt_pred()
         metrics = compute_metrics(gt, preds, conf_threshold=0.25)
         # Two classes (0 and 1) have GT and perfect predictions.
-        # Check per-class metrics for those, not macro (which averages over all 6 classes).
+        # Check per-class metrics for those, not macro (which averages over all 7 classes).
         pc = metrics["per_class"]
-        assert pc["human_artifact_wreck"]["precision"] == pytest.approx(1.0, abs=0.01)
-        assert pc["human_artifact_wreck"]["recall"]    == pytest.approx(1.0, abs=0.01)
-        assert pc["electrical_cable"]["precision"]     == pytest.approx(1.0, abs=0.01)
-        assert pc["electrical_cable"]["recall"]        == pytest.approx(1.0, abs=0.01)
+        assert pc["shipwreck"]["precision"] == pytest.approx(1.0, abs=0.01)
+        assert pc["shipwreck"]["recall"]    == pytest.approx(1.0, abs=0.01)
+        assert pc["submarine_pipeline"]["precision"] == pytest.approx(1.0, abs=0.01)
+        assert pc["submarine_pipeline"]["recall"]    == pytest.approx(1.0, abs=0.01)
         # mAP@0.5 should also be > 0
         assert metrics["macro"]["mAP50"] > 0.0
 
@@ -317,7 +317,7 @@ class TestMetrics:
             PredBox("t1", "M", 0, 0.9, Box(0.01, 0.01, 0.05, 0.05)),  # no overlap
         ]
         metrics = compute_metrics(gt, preds, conf_threshold=0.0)
-        assert metrics["per_class"]["human_artifact_wreck"]["precision"] == 0.0
+        assert metrics["per_class"]["shipwreck"]["precision"] == 0.0
 
     def test_conf_threshold_filters_low_confidence(self):
         from evaluate import GTBox, PredBox, Box, compute_metrics, load_predictions

@@ -68,26 +68,26 @@ export const ABLATION_RECORDS: AblationRecord[] = [
     baselineValue: 58.2,
     testedValue: 88.6,
     deltaPercent: +30.4,
-    decision: 'ADOPTED',
-    caption: 'Rejects acoustic shadow false alarms and sand ripples based on physical consistency. Yields +30.4% precision gain on held-out surveys.',
+    decision: 'RETAINED_HONESTLY',
+    caption: 'Offline evaluation recorded a +30.4-point precision delta, but the verifier is not connected to the current production runtime. Runtime detections therefore expose no verifier features or weights.',
   },
 ];
 
 export const MODEL_CHECKPOINTS: ModelCheckpoint[] = [
   {
     id: 'CHK-YOLO26N-VERIF-v1',
-    name: 'AquaSense YOLO26n-Sonar-v1.0',
-    architecture: 'Ultralytics YOLO26n (NMS-Free, Small-Target-Aware) + L2 Verifier',
-    calibrated: true,
-    plattScalingSplit: 'Held-out Survey Year 2021 (MILCO/NOMBO split)',
+    name: 'OceanAid YOLO26n-Sonar-v1.0',
+    architecture: 'Ultralytics YOLO26n (NMS-Free, Small-Target-Aware); verifier not active',
+    calibrated: false,
+    plattScalingSplit: 'Not fitted in the current production runtime',
     splitProtocol: 'Cross-Survey Year Split',
     mAP50: 0.146,
-    verifiedStatus: 'PRODUCTION_VERIFIED',
+    verifiedStatus: 'PRODUCTION_UNCALIBRATED',
     lastVerifiedDate: '2026-09-10',
   },
   {
     id: 'CHK-YOLO26N-SEG-GHOSTNET',
-    name: 'AquaSense YOLO26n-seg-ALDFG',
+    name: 'OceanAid YOLO26n-seg-ALDFG',
     architecture: 'YOLO26n-seg (Box Dimensions + Polygon Net Mask Heads)',
     calibrated: true,
     plattScalingSplit: 'Synthetic Composites Validation Split (18 real validation samples)',
@@ -98,7 +98,7 @@ export const MODEL_CHECKPOINTS: ModelCheckpoint[] = [
   },
   {
     id: 'CHK-TORCHVISION-BSD3',
-    name: 'AquaSense BSD3-Swappable-Detector',
+    name: 'OceanAid BSD3-Swappable-Detector',
     architecture: 'Torchvision ResNet50-FPN Detector (MIT/BSD clean backend)',
     calibrated: false,
     plattScalingSplit: 'Pending calibration fit',

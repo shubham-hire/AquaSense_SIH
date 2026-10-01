@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluate.py — AquaSense YOLO26 Nano Model Evaluation Suite
+evaluate.py — OceanAid YOLO26 Nano Model Evaluation Suite
 ===========================================================
 PS 26057 | SIH 2026
 
@@ -10,7 +10,7 @@ Accepts predictions from the trained YOLO26 Nano model and produces:
   2. Per-class confusion matrix
   3. False-positive / missed-detection gallery  (PNG grid, configurable limit)
   4. Tile-level and full-mission inference latency statistics
-  5. JSON report compatible with the AquaSense backend / UI API
+  5. JSON report compatible with the OceanAid backend / UI API
 
 CALIBRATION DISCIPLINE
 ----------------------
@@ -29,7 +29,7 @@ Predictions JSONL (one prediction per tile):
     "mission": "SeabedObjects",
     "detections": [
       {
-        "class_id": 0, "class_name": "human_artifact_wreck",
+        "class_id": 0, "class_name": "shipwreck",
         "confidence": 0.81,
         "box_cx_norm": 0.512, "box_cy_norm": 0.380,
         "box_w_norm": 0.240, "box_h_norm": 0.198,
@@ -86,12 +86,13 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 CLASS_NAMES: dict[int, str] = {
-    0: "human_artifact_wreck",
-    1: "electrical_cable",
-    2: "electronic_hazard",
-    3: "plastic_debris",
-    4: "metal_drum_scrap",
-    5: "biological_geological_exclusion",
+    0: "shipwreck",
+    1: "submarine_pipeline",
+    2: "cylinder",
+    3: "ghost_net",
+    4: "ghost_pot_trap",
+    5: "plastic_debris",
+    6: "metal_debris",
 }
 NUM_CLASSES = len(CLASS_NAMES)
 IOU_THRESHOLDS = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]  # for mAP@0.5:0.95
@@ -303,15 +304,18 @@ def compute_metrics(
     gt: list[GTBox],
     preds: list[PredBox],
     conf_threshold: float,
+    class_names: dict[int, str] | None = None,
 ) -> dict:
     """Compute per-class and macro precision, recall, F1, mAP@0.5, mAP@0.5:0.95."""
+    classes = class_names if class_names is not None else CLASS_NAMES
+    num_classes = len(classes)
 
     # mAP@0.5
     matches_50, n_gt = _match_predictions(gt, preds, iou_threshold=0.50)
 
     per_class: dict[int, dict] = {}
-    for cls_id in range(NUM_CLASSES):
-        cls_name = CLASS_NAMES[cls_id]
+    for cls_id in range(num_classes):
+        cls_name = classes[cls_id]
         cls_matches = matches_50.get(cls_id, [])
         n_gt_cls = n_gt.get(cls_id, 0)
         n_pred_cls = len(cls_matches)
@@ -347,7 +351,7 @@ def compute_metrics(
     for iou_t in IOU_THRESHOLDS:
         matches_t, n_gt_t = _match_predictions(gt, preds, iou_threshold=iou_t)
         class_aps = []
-        for cls_id in range(NUM_CLASSES):
+        for cls_id in range(num_classes):
             cls_m = matches_t.get(cls_id, [])
             n = n_gt_t.get(cls_id, 0)
             if not cls_m:
@@ -356,15 +360,15 @@ def compute_metrics(
             confs = [c for c, _ in cls_m]
             tps_  = [t for _, t in cls_m]
             class_aps.append(_average_precision(confs, tps_, n))
-        aps_50_95.append(sum(class_aps) / NUM_CLASSES)
+        aps_50_95.append(sum(class_aps) / num_classes)
 
-    map_50    = sum(pc["ap50"] for pc in per_class.values()) / NUM_CLASSES
+    map_50    = sum(pc["ap50"] for pc in per_class.values()) / num_classes
     map_50_95 = sum(aps_50_95) / len(IOU_THRESHOLDS)
 
     # Macro-averaged P/R/F1
-    macro_p  = sum(pc["precision"] for pc in per_class.values()) / NUM_CLASSES
-    macro_r  = sum(pc["recall"]    for pc in per_class.values()) / NUM_CLASSES
-    macro_f1 = sum(pc["f1"]        for pc in per_class.values()) / NUM_CLASSES
+    macro_p  = sum(pc["precision"] for pc in per_class.values()) / num_classes
+    macro_r  = sum(pc["recall"]    for pc in per_class.values()) / num_classes
+    macro_f1 = sum(pc["f1"]        for pc in per_class.values()) / num_classes
 
     return {
         "conf_threshold": conf_threshold,
@@ -387,13 +391,15 @@ def build_confusion_matrix(
     gt: list[GTBox],
     preds: list[PredBox],
     iou_threshold: float = 0.50,
+    num_classes: int | None = None,
 ) -> np.ndarray:
     """
     Returns a (NUM_CLASSES+1, NUM_CLASSES+1) confusion matrix.
     Row = GT class (last row = background / missed).
     Col = Pred class (last col = false positive background).
     """
-    n = NUM_CLASSES + 1   # +1 for background
+    class_count = num_classes if num_classes is not None else NUM_CLASSES
+    n = class_count + 1   # +1 for background
     cm = np.zeros((n, n), dtype=np.int64)
 
     # Index GT
@@ -418,19 +424,23 @@ def build_confusion_matrix(
             gts_in_tile[best_gt_idx][2] = True
             cm[best_gt_cls][pred.class_id] += 1   # TP or confusion
         else:
-            cm[NUM_CLASSES][pred.class_id] += 1   # FP (background predicted as class)
+            cm[class_count][pred.class_id] += 1   # FP (background predicted as class)
 
     # Missed detections: unmatched GT → background
     for gts in gt_index.values():
         for gt_cls, _, matched in gts:
             if not matched:
-                cm[gt_cls][NUM_CLASSES] += 1   # FN
+                cm[gt_cls][class_count] += 1   # FN
 
     return cm
 
 
-def confusion_matrix_to_dict(cm: np.ndarray) -> dict:
-    labels = [CLASS_NAMES[i] for i in range(NUM_CLASSES)] + ["background"]
+def confusion_matrix_to_dict(
+    cm: np.ndarray,
+    class_names: dict[int, str] | None = None,
+) -> dict:
+    classes = class_names if class_names is not None else CLASS_NAMES
+    labels = [classes[i] for i in range(len(classes))] + ["background"]
     return {
         "labels": labels,
         "matrix": cm.tolist(),

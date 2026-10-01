@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-calibrate.py — AquaSense Calibration Input Collection & Platt Scaling Fitter
+calibrate.py — OceanAid Calibration Input Collection & Platt Scaling Fitter
 ===========================================================================
 PS 26057 | SIH 2026
 
@@ -41,13 +41,13 @@ import numpy as np
 from evaluate import Box, GTBox, PredBox, load_ground_truth, load_predictions
 
 DEFAULT_CLASSES = {
-    0: "human_artifact_wreck",
-    1: "electrical_cable",
-    2: "electronic_hazard",
-    3: "plastic_debris",
-    4: "metal_drum_scrap",
-    5: "biological_geological_exclusion",
-    6: "ghost_gear",
+    0: "shipwreck",
+    1: "submarine_pipeline",
+    2: "cylinder",
+    3: "ghost_net",
+    4: "ghost_pot_trap",
+    5: "plastic_debris",
+    6: "metal_debris",
 }
 
 
@@ -152,9 +152,6 @@ def fit_platt_parameters(confidences: list[float], labels: list[int]) -> tuple[f
         P(y = 1 | s) = 1 / (1 + exp(A * s + B))
     Returns (A, B).
     """
-    from scipy.optimize import minimize
-    from scipy.special import expit
-
     s = np.array(confidences, dtype=np.float64)
     y = np.array(labels, dtype=np.float64)
 
@@ -168,27 +165,36 @@ def fit_platt_parameters(confidences: list[float], labels: list[int]) -> tuple[f
     t_neg = 1.0 / (n_neg + 2.0)
     targets = np.where(y == 1, t_pos, t_neg)
 
-    def loss(params: np.ndarray) -> float:
-        A, B = params[0], params[1]
-        # P(y=1|s) = 1 / (1 + exp(A*s + B)) = expit(-(A*s + B))
-        f = -(A * s + B)
-        p = np.clip(expit(f), 1e-12, 1.0 - 1e-12)
-        # Binary cross-entropy with smoothed targets
-        bce = -np.mean(targets * np.log(p) + (1.0 - targets) * np.log(1.0 - p))
-        # Mild L2 regularization on A and B
-        reg = 1e-4 * (A * A + B * B)
-        return float(bce + reg)
+    # Fit two logistic-regression parameters with damped Newton updates. This
+    # small solver keeps calibration runnable in the offline evaluation bundle
+    # without requiring SciPy solely for a two-parameter optimization.
+    design = np.column_stack((s, np.ones_like(s)))
+    params = np.array([-3.0, 0.0], dtype=np.float64)
+    regularization = 1e-4
+    for _ in range(100):
+        logits = -(design @ params)
+        logits = np.clip(logits, -60.0, 60.0)
+        probabilities = 1.0 / (1.0 + np.exp(-logits))
+        gradient = design.T @ (targets - probabilities) / len(s)
+        gradient += 2.0 * regularization * params
+        weights = probabilities * (1.0 - probabilities)
+        hessian = (design.T * weights) @ design / len(s)
+        hessian += 2.0 * regularization * np.eye(2)
+        step = np.linalg.solve(hessian, gradient)
+        params -= step
+        if float(np.linalg.norm(step)) < 1e-8:
+            break
 
-    # Initial guess: A ~ -3.0 (higher conf -> lower (A*s+B) -> higher P), B ~ 0.0
-    res = minimize(loss, x0=[-3.0, 0.0], method="L-BFGS-B")
-    A_opt, B_opt = float(res.x[0]), float(res.x[1])
-    return A_opt, B_opt
+    return float(params[0]), float(params[1])
 
 
 def apply_platt(s: float, A: float, B: float) -> float:
     """Applies Platt parameters to an uncalibrated score."""
-    from scipy.special import expit
-    return float(expit(-(A * s + B)))
+    value = -(A * s + B)
+    if value >= 0:
+        return float(1.0 / (1.0 + math.exp(-value)))
+    exponential = math.exp(value)
+    return float(exponential / (1.0 + exponential))
 
 
 def compute_ece(probs: list[float], labels: list[int], n_bins: int = 10) -> dict[str, Any]:
@@ -364,7 +370,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("=" * 65)
-    print("  AQUASENSE: CALIBRATION & PLATT SCALING FITTER")
+    print("  OCEANAID: CALIBRATION & PLATT SCALING FITTER")
     print("=" * 65)
 
     if args.synthetic_dry_run or not (args.manifest and args.preds and args.manifest.exists() and args.preds.exists()):

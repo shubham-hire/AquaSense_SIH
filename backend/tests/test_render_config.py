@@ -27,3 +27,11 @@ def test_docker_startup_seeds_mounted_disk_before_model_preflight():
     assert dockerfile.index(preflight) < dockerfile.index(server)
     assert "AQUASENSE_BATCH_SIZE=1" in dockerfile
     assert "COPY best.pt /data/models/best.pt" not in dockerfile
+
+
+def test_backend_only_dockerfile_refuses_startup_without_model_preflight():
+    dockerfile = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    preflight = "python -m app.preflight"
+    server = "exec uvicorn app.main:app"
+    assert "AQUASENSE_MODEL_PATH=/data/models/best.pt" in dockerfile
+    assert dockerfile.index(preflight) < dockerfile.index(server)
